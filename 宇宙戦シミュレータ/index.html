@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>宇宙戦シミュレータ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 配置: 左に作図盤（地図）と時間軸、右に操作パネル。狭い画面では縦に積む。
+   色: 作図盤は青みの灰、陣営色は青と橙、妨害場は青緑。操作部品は墨色で、陣営色と混ぜない */
+:root {
+  --bg: #e6eaef;
+  --panel: #f7f9fb;
+  --board: #fbfcfd;
+  --ink: #16202b;
+  --ink-2: #4a5666;
+  --ink-3: #7d8998;
+  --rule: #d0d7e0;
+  --grid: #e7ebf0;
+  --grid-2: #d3dae3;
+  --hover: #edf1f5;
+  --press: #16202b;
+  --on-press: #f7f9fb;
+  --c-blue: #2a78d6;
+  --c-orange: #eb6834;
+  --c-aqua: #1baf7a;
+  --c-violet: #6250d6;
+  --c-red: #e34948;
+  --c-yellow: #c98500;
+  --field: #1a9e70;
+  --danger: #b8322b;
+  --warn-bg: #fff4d6;
+  --font-ui: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --font-mark: "Dela Gothic One", "BIZ UDPGothic", "Yu Gothic UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #141c25; --board: #10171f;
+    --ink: #e4e9ef; --ink-2: #a8b3c0; --ink-3: #74808e;
+    --rule: #263241; --grid: #18212b; --grid-2: #223040;
+    --hover: #1b2530; --press: #e4e9ef; --on-press: #10171f;
+    --c-blue: #3987e5; --c-orange: #d95926; --c-aqua: #199e70; --c-violet: #9085e9; --c-red: #e66767; --c-yellow: #c98500;
+    --field: #22b383; --danger: #ef6b62; --warn-bg: #3a2f12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #141c25; --board: #10171f;
+  --ink: #e4e9ef; --ink-2: #a8b3c0; --ink-3: #74808e;
+  --rule: #263241; --grid: #18212b; --grid-2: #223040;
+  --hover: #1b2530; --press: #e4e9ef; --on-press: #10171f;
+  --c-blue: #3987e5; --c-orange: #d95926; --c-aqua: #199e70; --c-violet: #9085e9; --c-red: #e66767; --c-yellow: #c98500;
+  --field: #22b383; --danger: #ef6b62; --warn-bg: #3a2f12;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 var(--font-ui); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--rule); background: var(--panel); border-radius: 5px;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: var(--hover); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--press); color: var(--on-press); border-color: var(--press); }
+button.danger { color: var(--danger); }
+button[aria-pressed="true"] { background: var(--press); color: var(--on-press); border-color: var(--press); }
+:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 1px; }
+input[type="number"], input[type="text"], select, textarea {
+  background: var(--board); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; min-width: 0;
+}
+input[type="number"] { font-family: var(--font-num); font-size: 13px; }
+kbd { font-family: var(--font-num); font-size: 11px; color: var(--ink-3); margin-left: 4px; }
+[aria-pressed="true"] kbd { color: inherit; opacity: .7; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 8px; padding-inline: 16px; padding-block: 10px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.mark { font-family: var(--font-mark); font-size: 19px; letter-spacing: .04em; line-height: 1; }
+.bar .grow { flex: 1; }
+.scn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#scnName { width: 19em; font-weight: 700; }
+.note { margin: 0; color: var(--ink-2); font-size: 13px; max-width: 110ch; text-wrap: pretty; }
+
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; min-height: 0; }
+.stage { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.tools { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.group { display: flex; gap: 0; }
+.group > button { border-radius: 0; margin-left: -1px; }
+.group > button:first-child { border-radius: 5px 0 0 5px; margin-left: 0; }
+.group > button:last-child { border-radius: 0 5px 5px 0; }
+.toggles { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--ink-2); font-size: 13px; }
+.toggles label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+
+.board { position: relative; flex: 1; min-height: 340px; background: var(--board); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+.hud { position: absolute; left: 10px; top: 8px; display: grid; gap: 4px; pointer-events: none; font-size: 12px; }
+.hud .clock { font-family: var(--font-num); font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hud .mode { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 3px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); margin-left: 6px; vertical-align: 3px; }
+.hud .sideline { display: flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--board) 82%, transparent); padding: 1px 6px 1px 0; border-radius: 3px; width: max-content; max-width: 100%; }
+.hud .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.chip { font-size: 11px; padding: 0 5px; border-radius: 3px; background: var(--warn-bg); color: var(--ink); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.legend { position: absolute; left: 8px; bottom: 8px; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--rule); border-radius: 5px; font-size: 12px; max-width: min(300px, 70%); max-height: 60%; overflow: auto; }
+.legend summary { cursor: pointer; padding: 3px 8px; color: var(--ink-2); }
+.legend .rows { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 0 8px 6px; align-items: center; }
+.legend svg { display: block; }
+.scale { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--ink-2); pointer-events: none; text-align: right; font-family: var(--font-num); }
+.toolhint { position: absolute; right: 10px; top: 8px; font-size: 12px; color: var(--ink-2); background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--rule); border-radius: 4px; padding: 2px 8px; max-width: 46%; pointer-events: none; }
+.toolhint:empty { display: none; }
+.tip { position: absolute; z-index: 5; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; padding: 6px 9px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgb(0 0 0 / .12); max-width: 300px; }
+.tip b { font-weight: 700; }
+.tip .k { color: var(--ink-3); }
+
+.timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#seek { flex: 1 1 200px; min-width: 120px; accent-color: var(--ink); }
+#clock { font-family: var(--font-num); font-variant-numeric: tabular-nums; width: 6.5em; text-align: right; }
+.chartbox { position: relative; height: 96px; background: var(--board); border: 1px solid var(--rule); border-radius: 6px; flex: none; }
+#chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+.ticker { font-size: 12.5px; color: var(--ink-2); min-height: 1.6em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker .t { font-family: var(--font-num); color: var(--ink-3); margin-right: 8px; }
+
+.side { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--rule); }
+.tabs button { flex: 1; border: 0; border-radius: 0; background: none; padding: 8px 4px; color: var(--ink-2); border-bottom: 2px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
+.panel { overflow: auto; padding: 10px 14px 16px; flex: 1; min-height: 0; }
+.panel h3 { font-size: 12px; letter-spacing: .08em; color: var(--ink-2); margin: 14px 0 6px; font-weight: 700; }
+.panel h3:first-child { margin-top: 2px; }
+.hint { color: var(--ink-3); font-size: 12px; margin: 4px 0; }
+.seg { display: flex; gap: 6px; }
+.seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.typegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.typegrid button { display: flex; align-items: center; gap: 6px; text-align: left; padding: 4px 6px; }
+.typegrid button .c { margin-left: auto; color: var(--ink-3); font-family: var(--font-num); font-size: 11px; }
+.typegrid button[aria-pressed="true"] .c { color: inherit; opacity: .7; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 5px 10px; align-items: center; }
+.form > label { font-size: 13px; color: var(--ink-2); }
+.form .in { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.form .in > input, .form .in > select { flex: 1; width: 100%; }
+.form .in .u { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.form .full { grid-column: 1 / -1; }
+.form .help { grid-column: 1 / -1; margin: -3px 0 3px; font-size: 11.5px; color: var(--ink-3); }
+.form .check { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; font-size: 13px; }
+fieldset { border: 1px solid var(--rule); border-radius: 5px; padding: 6px 10px 10px; margin: 0 0 10px; }
+legend { font-size: 12px; color: var(--ink-2); padding: 0 4px; font-weight: 700; letter-spacing: .04em; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.row + .row { margin-top: 6px; }
+.selsum { margin: 0 0 8px; font-size: 13px; }
+.orbat { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.orbat th, .orbat td { padding: 2px 4px; border-bottom: 1px solid var(--rule); text-align: right; }
+.orbat th:first-child, .orbat td:first-child { text-align: left; }
+.orbat th { color: var(--ink-3); font-weight: 400; font-size: 11.5px; }
+.orbat tr.sum td { font-weight: 700; border-bottom: 0; }
+.verdict { border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; background: var(--board); }
+.verdict .big { font-size: 16px; font-weight: 700; text-wrap: balance; }
+.verdict .sub { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+.winbar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 6px 0 4px; }
+.winbar > div { min-width: 2px; }
+.winlab { display: flex; justify-content: space-between; font-size: 12px; font-variant-numeric: tabular-nums; gap: 8px; flex-wrap: wrap; }
+.progress { height: 6px; background: var(--grid-2); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+.progress > div { height: 100%; background: var(--ink-2); width: 0; }
+.log { font-size: 12.5px; max-height: 340px; overflow: auto; border-top: 1px solid var(--rule); margin-top: 6px; }
+.log div { padding: 3px 2px; border-bottom: 1px solid var(--grid-2); cursor: pointer; display: grid; grid-template-columns: 5.4em 1fr; gap: 6px; }
+.log div:hover { background: var(--hover); }
+.log .t { font-family: var(--font-num); color: var(--ink-3); font-size: 11.5px; padding-top: 1px; }
+.log .future { color: var(--ink-3); }
+.log .now { background: var(--warn-bg); }
+.swatches { display: flex; gap: 6px; }
+.swatches button { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.swatches button[aria-pressed="true"] { border-color: var(--ink); background: none; }
+.sidecard { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+.sidecard .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 700; }
+
+dialog { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); padding: 0; width: min(760px, calc(100% - 32px)); max-height: calc(100% - 40px); }
+dialog::backdrop { background: rgb(10 15 20 / .45); }
+dialog .dhead { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--rule); }
+dialog .dhead h2 { font-size: 16px; margin: 0; }
+dialog .dbody { padding: 12px 16px 16px; overflow: auto; max-height: calc(100vh - 140px); }
+dialog textarea { width: 100%; height: 260px; font-family: var(--font-num); font-size: 12px; }
+.help h3 { font-size: 14px; margin: 16px 0 4px; }
+.help h3:first-child { margin-top: 0; }
+.help p, .help li { max-width: 72ch; color: var(--ink-2); }
+.help ul { padding-left: 1.2em; margin: 4px 0; }
+.help b { color: var(--ink); }
+.status { font-size: 12px; color: var(--ink-2); min-height: 1.4em; }
+
+@media (max-width: 980px) {
+  .app { height: auto; }
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .board { flex: none; height: 62vh; min-height: 300px; }
+  .side { min-height: 0; }
+  .panel { overflow: visible; }
+}
+@media (max-width: 520px) {
+  #scnName { width: 100%; }
+  .scn { width: 100%; }
+  .typegrid { grid-template-columns: 1fr; }
+  .form { grid-template-columns: minmax(0, 1fr); }
+  .tools kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <span class="mark">宇宙戦シミュレータ</span>
+    <div class="scn">
+      <input id="scnName" type="text" aria-label="シナリオ名">
+      <select id="presetSel" aria-label="プリセットを開く"></select>
+    </div>
+    <span class="grow"></span>
+    <button id="undoBtn" title="元に戻す（Ctrl+Z）">元に戻す</button>
+    <button id="ioBtn">保存・読込</button>
+    <button id="helpBtn">使い方</button>
+  </header>
+  <p id="scnNote" class="note"></p>
+
+  <main class="work">
+    <section class="stage">
+      <div class="tools" role="toolbar" aria-label="地図の道具">
+        <div class="group" id="toolGroup">
+          <button data-tool="select" title="艦を選ぶ・動かす">選択<kbd>V</kbd></button>
+          <button data-tool="place" title="右の「置く艦」をクリックで配置">配置<kbd>P</kbd></button>
+          <button data-tool="goal" title="選んだ艦の目標地点をクリックで指定">目標<kbd>G</kbd></button>
+          <button data-tool="lane" title="クリックで点を打ち、ダブルクリックで確定">レーン<kbd>L</kbd></button>
+          <button data-tool="label" title="地図に文字を置く">文字<kbd>T</kbd></button>
+        </div>
+        <button id="fitBtn" title="全体を表示（選択中ならその艦へ）">全体を表示<kbd>F</kbd></button>
+        <div class="toggles">
+          <label title="再生中、撃ち合っている場所へ視点を寄せる。地図を手で動かすと切れる"><input type="checkbox" id="optFollow" checked>交戦を追う</label>
+          <label><input type="checkbox" id="optShots" checked>射線</label>
+          <label><input type="checkbox" id="optGoals" checked>目標線</label>
+          <label><input type="checkbox" id="optLinks">リンク</label>
+          <label><input type="checkbox" id="optDead" checked>撃沈艦</label>
+          <label><input type="checkbox" id="optLabels">艦名</label>
+        </div>
+      </div>
+      <div class="board" id="board">
+        <canvas id="map" aria-label="戦場の地図"></canvas>
+        <div class="hud" id="hud"></div>
+        <div class="toolhint" id="toolhint"></div>
+        <details class="legend" id="legendBox" open><summary>凡例</summary><div class="rows" id="legend"></div></details>
+        <div class="scale" id="scale"></div>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="timeline">
+        <button id="resetBtn" title="計算を捨てて T=0 の編集に戻る">編集に戻る</button>
+        <button id="playBtn" class="primary">再生</button>
+        <input id="seek" type="range" min="0" max="14400" step="5" value="0" aria-label="時刻">
+        <output id="clock">T+0:00:00</output>
+        <select id="speedSel" aria-label="再生の速さ">
+          <option value="30">1秒で30秒</option>
+          <option value="120">1秒で2分</option>
+          <option value="300" selected>1秒で5分</option>
+          <option value="900">1秒で15分</option>
+          <option value="3600">1秒で1時間</option>
+        </select>
+        <button id="endBtn">結果まで計算</button>
+      </div>
+      <div class="chartbox"><canvas id="chart" aria-label="戦力の推移"></canvas><div class="tip" id="chartTip" hidden></div></div>
+      <div class="ticker" id="ticker"></div>
+    </section>
+
+    <aside class="side">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="place" aria-selected="true">配置</button>
+        <button role="tab" data-tab="types" aria-selected="false">艦種</button>
+        <button role="tab" data-tab="sides" aria-selected="false">陣営と設定</button>
+        <button role="tab" data-tab="result" aria-selected="false">結果</button>
+      </nav>
+      <div class="panel" id="tab-place">
+        <h3>置く艦</h3>
+        <div class="seg" id="palSide"></div>
+        <div class="typegrid" id="palTypes" style="margin-top:6px"></div>
+        <div class="form" style="margin-top:8px">
+          <label for="palCount">隻数</label><div class="in"><input id="palCount" type="number" min="1" max="300" value="10"><span class="u">隻</span></div>
+          <label for="palGap">間隔</label><div class="in"><input id="palGap" type="number" min="0" step="0.1" value="0.6"><span class="u">光秒</span></div>
+          <label for="palForm">隊形</label><div class="in"><select id="palForm"><option value="cluster">塊</option><option value="line">横一列</option><option value="column">縦一列</option><option value="ring">円</option></select></div>
+        </div>
+        <p class="hint">「配置」を選んで地図をクリックすると置けます。</p>
+        <h3>選んだ艦</h3>
+        <div id="selBox"></div>
+        <h3>編成</h3>
+        <div id="orbat"></div>
+      </div>
+      <div class="panel" id="tab-types" hidden>
+        <div class="typegrid" id="typeList"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="typeNew">新しい艦種</button>
+          <button id="typeDup">複製</button>
+          <button id="typeDel" class="danger">削除</button>
+        </div>
+        <p class="hint" id="typeUse"></p>
+        <div id="typeForm"></div>
+      </div>
+      <div class="panel" id="tab-sides" hidden>
+        <div id="sideCards"></div>
+        <fieldset><legend>全体の設定</legend><div class="form" id="settingsForm"></div></fieldset>
+        <fieldset><legend>シナリオのメモ</legend><textarea id="scnNoteEdit" rows="4" style="width:100%"></textarea></fieldset>
+      </div>
+      <div class="panel" id="tab-result" hidden>
+        <div id="verdict"></div>
+        <div id="resultTable"></div>
+        <h3>複数回の試行</h3>
+        <p class="hint">乱数シードを変えて何度も戦わせ、勝率を出します。命中判定と到着誤差だけが変わります。</p>
+        <div class="row">
+          <select id="batchN" aria-label="試行回数"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+          <button id="batchBtn">試行する</button>
+          <button id="batchStop" hidden>中止</button>
+        </div>
+        <div id="batchOut"></div>
+        <h3>出来事</h3>
+        <label class="hint" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="logMinor">ジャンプやレーン移動も表示</label>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<dialog id="ioDlg">
+  <div class="dhead"><h2>保存・読込</h2><button data-close>閉じる</button></div>
+  <div class="dbody">
+    <p class="hint">いまのシナリオ（配置・艦種・設定）を JSON で書き出します。下の欄に貼り付けて「読み込む」を押すと戻せます。</p>
+    <textarea id="ioText" spellcheck="false" aria-label="シナリオのJSON"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="ioCopy">コピー</button>
+      <button id="ioSave">ファイルに保存</button>
+      <label class="row" style="gap:4px"><button id="ioOpenBtn" type="button">ファイルを開く</button><input id="ioFile" type="file" accept=".json,application/json" hidden></label>
+      <span class="grow" style="flex:1"></span>
+      <button id="ioLoad" class="primary">この内容を読み込む</button>
+    </div>
+    <p class="status" id="ioStatus"></p>
+  </div>
+</dialog>
+
+<dialog id="helpDlg">
+  <div class="dhead"><h2>使い方</h2><button data-close>閉じる</button></div>
+  <div class="dbody help">
+    <h3>流れ</h3>
+    <ul>
+      <li><b>配置</b>: 右の「置く艦」で陣営と艦種を選び、道具の「配置」で地図をクリック。隻数・間隔・隊形も選べる</li>
+      <li><b>行動</b>: 艦をクリック（ドラッグで囲むと複数）して、右の「選んだ艦」で行動・狙う敵・撤退・出現時刻を変える。「目標」道具で行き先を指定できる</li>
+      <li><b>性能</b>: 「艦種」タブで耐久・ウォード・射程・威力・速さ・ロックタイムなどを変える。同じ艦種の艦すべてに効く</li>
+      <li><b>再生</b>: 「再生」で時間が進む。スライダーで巻き戻して見直せる。「結果まで計算」で一気に決着まで進む</li>
+      <li><b>勝率</b>: 「結果」タブの「複数回の試行」で、乱数を変えて何度も戦わせる</li>
+    </ul>
+    <h3>地図の操作</h3>
+    <ul>
+      <li>ホイールで拡大・縮小。右ドラッグか中ボタンドラッグ（スマホは指1本）で移動。<b>F</b> で全体表示</li>
+      <li>選んだ艦はドラッグで動かせる。<b>Delete</b> で削除、<b>Ctrl+Z</b> で元に戻す、<b>Space</b> で再生・停止</li>
+      <li>レーン: 「レーン」道具でクリックして点を打ち、ダブルクリックか Enter で確定。既存のレーンの点の近くは吸い付く。レーンはクリックで選んで Delete で消せる</li>
+      <li>編集は T=0 の状態に対して行う。計算の途中で編集すると、計算は捨てて T=0 に戻る</li>
+    </ul>
+    <h3>単位</h3>
+    <p>距離は<b>光秒</b>（1光秒 ≈ 30万km）、速さは<b>c</b>（光速の何倍か）。0.05c なら1光秒進むのに20秒かかる。時間は T+時:分:秒。</p>
+    <h3>計算のしくみ（簡易モデル）</h3>
+    <ul>
+      <li><b>射撃</b>: 射程内の標的に「発射間隔」ごとに1発。命中率 = 命中率 ×（1 − 射程端での命中低下 × 距離/射程）×（1 − 相手の回避）。当たるとまずウォードが減り、なくなると船体耐久が減る。耐久 0 で撃沈</li>
+      <li><b>ジャンプ（任意座標）</b>: 遠い目的地（設定「ジャンプを使う最短距離」より遠い）へは跳ぶ。着くと<b>ロックタイム</b>中は次に跳べない。ノード艦のリンク内ならロックタイムが縮み、ノード艦を失うと元の長さに戻る</li>
+      <li><b>レーン（レーン型）</b>: 自陣営のレーンの近く（設定「レーンに乗れる距離」）にいれば、つながったレーン上のどこへでも一瞬で出られる。連続して跳べる。エルダ級はレーンを敵の方へ延ばす</li>
+      <li><b>妨害場</b>: 展開中は動けない。完成すると範囲内では誰もジャンプできず、範囲内のレーンは寸断される（自軍も縛る）。通常航行での出入りはできる</li>
+      <li><b>探知と反応</b>: 艦は探知距離内の敵を見つける。陣営として動くのは「光の遅れ（距離の秒数）＋反応時間」の後。射程の1.5倍以内の敵には即座に応戦する。情報共有がない陣営は、各艦が自分の探知距離の中しか知らない</li>
+      <li><b>勝敗</b>: 片方が全滅または全艦撤退したら決着。制限時間に達したら、残存戦力（コスト × 耐久の割合、離脱した艦も含む）の割合で判定する</li>
+    </ul>
+    <h3>行動の種類</h3>
+    <ul>
+      <li><b>突撃</b>: 標的の射程の85%まで近づいて撃つ</li>
+      <li><b>射程維持</b>: 射程の8〜9割の距離を保つ。近づかれたら下がる</li>
+      <li><b>持ち場防衛</b>: 持ち場（初期位置か、到着した目標地点）から一定距離の中だけで戦う</li>
+      <li><b>要艦の護衛</b>: いちばん近い要艦（ノード艦・静穏場艦・通信艦・エルダ級など特殊能力を持つ艦）に付き添う。要艦がジャンプすると同じ先へ跳ぶ</li>
+      <li><b>艦隊に随伴</b>: 味方の武装艦の中心の少し後ろに付いていく</li>
+      <li><b>静止</b>: 動かない</li>
+    </ul>
+    <p>数値はどれも仮置きです。設定資料（思考実験まとめ.md）で決まっている値は、通常航行 0.05c、リンク時のロックタイム45分、通信艦の再同期15分、静穏場の展開15分・維持3時間、レーン敷設 1光分あたり40分です。</p>
+  </div>
+</dialog>
+
+<script src="engine.js"></script>
+<script src="presets.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
