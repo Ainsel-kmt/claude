@@ -355,14 +355,19 @@
     ctx.fillStyle = C.ink3;
     ctx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-num');
     ctx.textBaseline = 'top';
+    // 目盛りの数字（右端の縦の数字と下端の横の数字が重ならないよう、角は空ける）
     for (let k = x0; k <= x1; k++) {
       if (k % 5) continue;
-      ctx.fillText(fmtLs(k * st), sx(k * st) + 3, H - 14);
+      const px = sx(k * st);
+      if (px > W - 44) continue;
+      ctx.fillText(fmtLs(k * st), px + 3, H - 14);
     }
     ctx.textBaseline = 'middle';
     for (let k = y0; k <= y1; k++) {
-      if (k % 5 || k === 0) continue;
-      ctx.fillText(fmtLs(k * st), W - 34, sy(k * st) - 7);
+      if (k % 5) continue;
+      const py = sy(k * st) - 7;
+      if (py > H - 26 || py < 12) continue;
+      ctx.fillText(fmtLs(k * st), W - 34, py);
     }
     $('scale').textContent = '1目盛り ' + fmtLs(st) + '光秒（約' + fmtKm(st) + '）';
   }
