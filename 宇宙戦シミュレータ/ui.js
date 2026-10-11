@@ -1811,7 +1811,8 @@
       navigator.clipboard.writeText(txt).then(() => { $('ioStatus').textContent = 'コピーしました。'; }, fallback);
     } catch (e) { fallback(); }
   };
-  $('ioSave').onclick = () => {
+  // 「ファイルに保存」はローカルで開いたときだけ置く（埋め込み表示ではダウンロードできないため外すことがある）
+  if ($('ioSave')) $('ioSave').onclick = () => {
     try {
       const blob = new Blob([$('ioText').value], { type: 'application/json' });
       const a = document.createElement('a');
