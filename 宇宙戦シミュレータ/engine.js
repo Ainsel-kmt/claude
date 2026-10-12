@@ -52,7 +52,7 @@
   const DEFAULT_TYPE = {
     name: '新しい艦種', abbr: '新', shape: 'circle', size: 1, cost: 1, origin: 0, known: false,
     hp: 300, shield: 0, shieldRegen: 0, evasion: 0,
-    wDamage: 10, wRange: 3, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2,
+    wDamage: 10, wRange: 3, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 1,
     speed: 0.05, sensor: 60, jump: 'none', lockTime: 0,
     ai: 'assault', priority: 'nearest', retreatAt: 0,
     linkOn: false, linkRadius: 5, linkCapacity: 10, linkLock: 2700, linkBonus: 0.3,
@@ -90,6 +90,7 @@
     { g: '兵装', k: 'wInterval', label: '発射間隔', unit: '秒', min: 1 },
     { g: '兵装', k: 'wAccuracy', label: '命中率', t: 'pct' },
     { g: '兵装', k: 'wFalloff', label: '射程端での命中低下', t: 'pct', help: '射程いっぱいの距離で、命中率がこの割合だけ下がる' },
+    { g: '兵装', k: 'wMounts', label: '砲門の数', unit: '門', min: 1, help: '発射間隔ごとに、射程内の別々の敵を1門ずつ撃つ（拠点など）。敵が門の数より少なければ、空いた門は標的に重ねて撃つ' },
     { g: '機動', k: 'speed', label: '通常航行の速さ', unit: 'c', step: 0.005, min: 0 },
     { g: '機動', k: 'sensor', label: '探知距離', unit: '光秒', min: 0 },
     { g: '機動', k: 'jump', label: 'ジャンプ', t: 'select', opts: JUMP },
@@ -148,7 +149,9 @@
   const hyp = (x, y) => Math.sqrt(x * x + y * y);
   const dist = (a, b) => hyp(a.x - b.x, a.y - b.y);
   const isKey = (d) => d.linkOn || d.fieldOn || d.commsOn || d.layerOn;
-  const dpsOf = (d) => (d.wDamage > 0 ? d.wDamage * d.wAccuracy / Math.max(1, d.wInterval) : 0);
+  const isStation = (d) => d.speed <= 0 && d.jump === 'none';
+  const mountsOf = (d) => Math.max(1, Math.floor(d.wMounts || 1));
+  const dpsOf = (d) => (d.wDamage > 0 ? d.wDamage * d.wAccuracy / Math.max(1, d.wInterval) * mountsOf(d) : 0);
 
   function fmtTime(sec) {
     sec = Math.max(0, Math.round(sec));
@@ -257,7 +260,7 @@
         cd: 0, tgt: -1, rt: 0,
         linked: false, linkLock: 0, linkBonus: 0, commsAt: 0,
         fs: 0, ft: 0, lay: null, layCd: 0, retreat: false,
-        laneNo: 0, laneNoX: 0, laneNoY: 0, protId: -1, protAt: 0,
+        laneNo: 0, laneNoX: 0, laneNoY: 0, protId: -1, protAt: 0, reliefId: -1, station: -1,
         kills: 0, dealt: 0, diedAt: -1, by: -1, state: '',
       };
       u.cd = S.rng() * d.wInterval;
@@ -265,6 +268,16 @@
       S.units.push(u);
       S.maxRange = Math.max(S.maxRange, d.wRange);
     });
+    // 持ち場防衛の艦は、持ち場の近く（STATION_RANGE 以内）にある味方の拠点（動かない艦）を覚えておく
+    for (const u of S.units) {
+      if (u.ai !== 'hold') continue;
+      let bd = STATION_RANGE;
+      for (const p of S.units) {
+        if (p === u || p.side !== u.side || !isStation(p.def)) continue;
+        const dd = hyp(p.x - u.hx, p.y - u.hy);
+        if (dd < bd) { bd = dd; u.station = p.id; }
+      }
+    }
     S.init = s.sides.map((_, k) => S.units.reduce((a, u) => a + (u.side === k ? u.def.cost : 0), 0));
     S.initCount = s.sides.map((_, k) => S.units.filter((u) => u.side === k).length);
     const steps = Math.ceil(set.timeLimit / set.dt);
@@ -353,6 +366,8 @@
         case 'commsDown': text = sd + ' の情報共有が途切れた（通信艦がいない、または再同期中）'; break;
         case 'commsUp': text = sd + ' の情報共有が復帰'; break;
         case 'retreatAll': text = sd + ' の戦力が' + e.v + 'を下回り、全軍が撤退に移る'; break;
+        case 'relief': text = sd + ' の ' + nm + ' が ' + e.v + ' の救援に向かう'; break;
+        case 'stationLost': text = sd + ' の ' + nm + ' が守っていた ' + e.v + ' を失い、護衛に切り替えた'; break;
         case 'end': text = e.v; break;
         default: text = e.kind;
       }
@@ -616,6 +631,11 @@
   }
 
   function protectee(S, u) {
+    if (u.reliefId >= 0) {
+      const r = S.units[u.reliefId];
+      if (r && active(r) && S.attacked && S.attacked[u.side].has(r.id)) return r;
+      u.reliefId = -1; u.protAt = 0;
+    }
     if (u.protAt > S.t) {
       const p = S.units[u.protId];
       if (p && active(p)) return p;
@@ -628,6 +648,51 @@
   // 護衛する要艦は近く（ESCORT_RANGE 以内）から選ぶ。遠くにしかいなければ護衛しない
   const ESCORT_RANGE = 60;
   const GROUP_RANGE = 20;
+  // 持ち場防衛の艦が「この拠点を守っている」とみなす距離
+  const STATION_RANGE = 15;
+  // 護衛が守る艦からこれ以上離れていたら、迎え撃つより先に守る艦のそばへ戻る
+  const ESCORT_GAP = 10;
+
+  // 攻められている味方の拠点（動かない艦）: 陣営が知っている敵の武装艦が、その敵の射程の2倍+3光秒以内にいるもの。
+  // 刻みごとに数え、攻められはじめた時刻を覚えておく（救援要請が届くまでの遅れに使う）
+  function updateAttacked(S) {
+    if (!S.attacked) S.attacked = S.sides.map(() => new Map());
+    S.sides.forEach((_, side) => {
+      const M = S.attacked[side], C = S.contacts[side], now = new Set();
+      let foes = null;
+      for (const p of S.units) {
+        if (p.side !== side || !visible(p) || !isStation(p.def)) continue;
+        if (!foes) foes = S.units.filter((e) => e.side !== side && visible(e) && e.def.wDamage > 0 && C.has(e.id) && C.get(e.id).at <= S.t);
+        for (const e of foes) {
+          const r = e.def.wRange * 2 + 3;
+          if (Math.abs(e.x - p.x) <= r && Math.abs(e.y - p.y) <= r && dist(e, p) <= r) { now.add(p.id); break; }
+        }
+      }
+      for (const id of [...M.keys()]) if (!now.has(id)) M.delete(id);
+      for (const id of now) if (!M.has(id)) M.set(id, S.t);
+    });
+  }
+
+  // 救援: 手が空いた護衛の艦（標的がなく、自分と守る艦のまわり ESCORT_RANGE 以内に知っている敵の武装艦がいない）は、
+  // 攻められている味方の拠点のうちいちばん近いものを守りに行く。拠点の救援要請は、情報共有があればすぐ、
+  // なければ光の速さで届く（攻められはじめてから、拠点までの距離の秒数だけ遅れる）。
+  // 動く要艦（ノード艦など）は対象にしない（守っている艦を置いて、離れた艦を追いかけてしまうため）
+  function reliefFor(S, u, p) {
+    const att = S.attacked ? S.attacked[u.side] : null;
+    if (!att || !att.size) return null;
+    for (const e of S.units) {
+      if (e.side === u.side || !visible(e) || e.def.wDamage <= 0) continue;
+      if ((dist(u, e) <= ESCORT_RANGE || (p && dist(p, e) <= ESCORT_RANGE)) && canSee(S, u, e)) return null;
+    }
+    let best = null, bd = Infinity;
+    for (const [id, since] of att) {
+      const r = S.units[id];
+      const dd = dist(u, r);
+      if (!S.sharing[u.side] && S.t - since < dd) continue;
+      if (dd < bd) { bd = dd; best = r; }
+    }
+    return best;
+  }
 
   function findProtectee(S, u) {
     let best = null, bd = ESCORT_RANGE;
@@ -884,6 +949,12 @@
     }
     if (d.fieldOn && u.fs === 0) return; // 展開待ち（この刻みの後で展開に入る）
 
+    // 守っていた拠点を失った持ち場防衛の艦は、護衛に切り替える（その場で止まり続けないように）
+    if (u.ai === 'hold' && u.station >= 0 && !S.units[u.station].alive) {
+      ev(S, 'stationLost', u.side, u.tid, S.units[u.station].def.name);
+      u.ai = 'escort'; u.station = -1; u.protAt = 0;
+    }
+
     const R = d.wRange;
     switch (u.ai) {
       case 'static': return;
@@ -912,9 +983,18 @@
         return;
       }
       case 'escort': {
-        const p = protectee(S, u);
+        let p = protectee(S, u);
+        if (!tg && d.wDamage > 0 && u.reliefId < 0) {
+          const r = reliefFor(S, u, p);
+          if (r && r !== p) {
+            u.reliefId = r.id; p = r;
+            ev(S, 'relief', u.side, u.tid, r.def.name);
+          }
+        }
         if (!p) { if (tg) approach(S, u, tg, R * 0.85); return; }
         const q = p.jump ? { x: p.jump.x, y: p.jump.y } : p;
+        // 守る艦から遠いうちは、まずそこへ向かう（ジャンプも使う）
+        if (dist(u, q) > R * 2 + 3 + ESCORT_GAP) { moveTo(S, u, q.x, q.y); return; }
         if (!p.jump && tg && dist(tg, p) < R * 2 + 3) {
           // 要艦に近づく敵を、要艦から離れすぎない範囲で迎え撃つ
           if (dist(u, tg) > R * 0.85) {
@@ -982,6 +1062,26 @@
 
   const IDLE = -1e9;
 
+  // 1回の斉射。砲門が複数あれば、標的のほかに射程内の敵を近い順に1門ずつ撃ち、余った門は標的に重ねる
+  function volley(S, u, tg) {
+    fire(S, u, tg);
+    const n = mountsOf(u.def);
+    if (n <= 1) return;
+    const R = u.def.wRange, list = [];
+    for (const e of S.units) {
+      if (e === tg || e.side === u.side || !visible(e)) continue;
+      const dx = Math.abs(e.x - u.x), dy = Math.abs(e.y - u.y);
+      if (dx > R || dy > R) continue;
+      const dd = hyp(dx, dy);
+      if (dd <= R) list.push([dd, e]);
+    }
+    list.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < n - 1; i++) {
+      const e = i < list.length ? list[i][1] : tg;
+      if (e.alive) fire(S, u, e);
+    }
+  }
+
   function combat(S) {
     const dt = S.set.dt;
     for (const u of S.units) {
@@ -1001,7 +1101,7 @@
       let guard = 0;
       while (u.cd <= 0 && guard++ < 50) {
         if (!tg.alive) { tg = nearestInRange(S, u); if (!tg) break; }
-        fire(S, u, tg);
+        volley(S, u, tg);
         u.cd += Math.max(1, d.wInterval);
       }
       if (u.cd < 0) u.cd = 0;
@@ -1162,6 +1262,7 @@
     rebuildLanes(S);
     updateSharing(S, false);
     updateContacts(S);
+    updateAttacked(S);
     updateLinks(S);
     sideRetreatCheck(S);
     for (const u of S.units) think(S, u);

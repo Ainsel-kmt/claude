@@ -23,7 +23,7 @@
     S: null, R: null, src: null,
     vt: 0, playing: false, speed: 60, last: 0, realT: 0,
     cam: 'director', follow: -1, selected: -1,
-    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, nebula: true, film: true, bloom: 1, height: 1, shipScale: 1 },
+    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, nebula: true, film: true, bloom: 1, height: 1, spread: 1, shipScale: 1 },
   };
 
   // ---------------------------------------------------------------- 起動
@@ -229,7 +229,7 @@
     }
     R.flashes.sort((p, q) => p.t - q.t);
     // 字幕: 主な出来事（撃沈は要艦・大型艦だけ）
-    const KEYKIND = { arrive: 1, appear: 1, fieldStart: 1, fieldUp: 1, fieldFail: 1, fieldDown: 1, layStart: 1, layEnd: 1, layStop: 1, commsDown: 1, commsUp: 1, retreatAll: 1, end: 1 };
+    const KEYKIND = { arrive: 1, appear: 1, fieldStart: 1, fieldUp: 1, fieldFail: 1, fieldDown: 1, layStart: 1, layEnd: 1, layStop: 1, commsDown: 1, commsUp: 1, retreatAll: 1, relief: 1, stationLost: 1, end: 1 };
     const bigType = (name) => Object.values(S.scn.types).some((t) => t.name && name.indexOf(t.name) >= 0 && (E.isKey(t) || t.cost >= 8));
     for (const e of S.events) {
       if (e.minor) continue;
@@ -492,6 +492,16 @@
     scene.add(world.glints);
     // 艦ごとの向きの記憶
     world.unitState = S.units.map(() => ({ q: new THREE.Quaternion(), init: false, pos: new THREE.Vector3(), vis: false }));
+    // 横の散らし: 艦ごとの向きと距離（円盤の中に一様に）と、いまの値
+    world.off = new Float32Array(S.units.length * 2);
+    world.raw = new Float32Array(S.units.length * 2);
+    world.rawOk = new Uint8Array(S.units.length);
+    world.spreadDir = new Float32Array(S.units.length * 2);
+    S.units.forEach((u, i) => {
+      const a = hashf(i, 11) * Math.PI * 2, f = Math.sqrt(0.05 + 0.95 * hashf(i, 12));
+      world.spreadDir[i * 2] = Math.cos(a) * f; world.spreadDir[i * 2 + 1] = Math.sin(a) * f;
+    });
+    world.spreadCut = true;
     // 地名・要艦の名前の札
     const lab = $('labels');
     world.placeLabels = R.marks.map((m) => { const s = document.createElement('span'); s.textContent = m.text; lab.appendChild(s); return { el: s, x: m.x, y: m.y }; });
@@ -521,22 +531,63 @@
   }
 
   // 艦 i の時刻 vt での位置（見えないときは null）
-  function unitPos(i, fa, out) {
+  // 計算上の位置（平面）。見えない艦は false
+  const XY = { x: 0, y: 0 };
+  function unitXY(i, fa) {
     const R = V.R, F = R.F, f0 = F[fa.k], f1 = F[Math.min(fa.k + 1, F.length - 1)], o = i * FW, u = R.S.units[i];
     const a = f0.u[o + 4];
-    if (!(a & FL.alive) || !(a & FL.present) || (a & FL.escaped) || (a & FL.jump)) {
-      // 撃沈の直前（同じ区間内）はまだ見せる
-      return null;
-    }
-    if (u.diedAt >= 0 && V.vt >= u.diedAt) return null;
+    if (!(a & FL.alive) || !(a & FL.present) || (a & FL.escaped) || (a & FL.jump)) return false;
+    if (u.diedAt >= 0 && V.vt >= u.diedAt) return false;
     let x = f0.u[o], y = f0.u[o + 1];
     const b = f1.u[o + 4];
     if ((b & FL.present) && !(b & FL.jump) && !(b & FL.escaped)) {
       const x1 = f1.u[o], y1 = f1.u[o + 1];
       if (Math.hypot(x1 - x, y1 - y) <= u.def.speed * (f1.t - f0.t) * 1.6 + 0.6) { x = lerp(x, x1, fa.a); y = lerp(y, y1, fa.a); }
     }
-    return out.set(x, R.h[i] * V.opts.height, y);
+    XY.x = x; XY.y = y;
+    return true;
   }
+
+  // 見せる位置: 計算上の位置に、高さと横の散らし（updateSpread）を足したもの
+  function unitPos(i, fa, out) {
+    if (!unitXY(i, fa)) return null;
+    return out.set(XY.x + world.off[i * 2], V.R.h[i] * V.opts.height, XY.y + world.off[i * 2 + 1]);
+  }
+
+  // 横の散らし（見た目だけ）: 計算では大群がほぼ一点に寄ることがあり、そのままだと高さの段だけで縦に積み重なって見える。
+  // まわり SPREAD_CELL 以内に何隻いるかを数え、多いほど広い水平の円盤に散らす（艦ごとに決まった向きと距離）
+  const SPREAD_CELL = 0.4, SPREAD_GAP = 0.22, SPREAD_MAX = 3;
+  function updateSpread(fa, dtReal) {
+    const R = V.R, n = R.n, off = world.off, raw = world.raw, ok = world.rawOk, dir = world.spreadDir;
+    const grid = new Map();
+    const cell = (x, y) => Math.floor(x / SPREAD_CELL) + ',' + Math.floor(y / SPREAD_CELL);
+    for (let i = 0; i < n; i++) {
+      ok[i] = 0;
+      if (R.S.units[i].def.speed <= 0 || !unitXY(i, fa)) continue;
+      raw[i * 2] = XY.x; raw[i * 2 + 1] = XY.y; ok[i] = 1;
+      const k = cell(XY.x, XY.y);
+      const l = grid.get(k);
+      if (l) l.push(i); else grid.set(k, [i]);
+    }
+    const k = cut() ? 1 : 1 - Math.exp(-dtReal * 3);
+    const amount = SPREAD_GAP * V.opts.spread * Math.sqrt(V.opts.shipScale);
+    for (let i = 0; i < n; i++) {
+      if (!ok[i]) continue;
+      const x = raw[i * 2], y = raw[i * 2 + 1];
+      const cx = Math.floor(x / SPREAD_CELL), cy = Math.floor(y / SPREAD_CELL);
+      let cnt = 0;
+      for (let ax = -1; ax <= 1; ax++) for (let ay = -1; ay <= 1; ay++) {
+        const l = grid.get((cx + ax) + ',' + (cy + ay));
+        if (!l) continue;
+        for (const j of l) if (Math.abs(raw[j * 2] - x) <= SPREAD_CELL && Math.abs(raw[j * 2 + 1] - y) <= SPREAD_CELL) cnt++;
+      }
+      const r = Math.min(SPREAD_MAX, amount * Math.sqrt(Math.max(0, cnt - 1)));
+      off[i * 2] += (dir[i * 2] * r - off[i * 2]) * k;
+      off[i * 2 + 1] += (dir[i * 2 + 1] * r - off[i * 2 + 1]) * k;
+    }
+    world.spreadCut = false;
+  }
+  const cut = () => world.spreadCut;
 
   function updateShips(fa, dtReal) {
     const R = V.R, F = R.F, f0 = F[fa.k], f1 = F[Math.min(fa.k + 1, F.length - 1)];
@@ -749,7 +800,7 @@
   const hashf = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
   function updateEffects(fa) {
-    const R = V.R, vt = V.vt;
+    const R = V.R, vt = V.vt, off = world.off;
     spriteN = 0;
     // 射線
     let nb = 0;
@@ -763,8 +814,8 @@
         const o = k * SW, t = R.shots[o + 6];
         if (t > vt) break;
         const sid = R.shots[o + 7], tid = R.shots[o + 8], hit = R.shots[o + 4] > 0;
-        const sx = R.shots[o], sz = R.shots[o + 1], sy = R.h[sid] * V.opts.height;
-        let tx = R.shots[o + 2], tz = R.shots[o + 3], ty = R.h[tid] * V.opts.height;
+        const sx = R.shots[o] + off[sid * 2], sz = R.shots[o + 1] + off[sid * 2 + 1], sy = R.h[sid] * V.opts.height;
+        let tx = R.shots[o + 2] + off[tid * 2], tz = R.shots[o + 3] + off[tid * 2 + 1], ty = R.h[tid] * V.opts.height;
         const travel = Math.max(0.05, Math.hypot(tx - sx, tz - sz, ty - sy));
         if (!hit) {
           // 外れ: 標的の脇を抜けて先へ
@@ -807,21 +858,21 @@
     for (let k = lo; k < F.length; k++) {
       const e = F[k];
       if (e.t > vt) break;
-      const age = vt - e.t, y = R.h[e.i] * V.opts.height;
+      const age = vt - e.t, y = R.h[e.i] * V.opts.height, ex = e.x + off[e.i * 2], ey = e.y + off[e.i * 2 + 1];
       const len = V.models.defaultLength(R.S.units[e.i].tid, R.S.units[e.i].def) * V.opts.shipScale;
       if (e.kind === 'death') {
         const dur = simDur(e.big ? 14 : 8, e.big ? 2.4 : 1.6), p = age / dur;
         if (p > 1) continue;
         const sz = Math.max(len * 2.2, 0.3) * (e.big ? 1.6 : 1);
-        sprite('flare', e.x, y, e.y, sz * (0.8 + p * 0.6), COL.flash, Math.max(0, 1 - p * 3));
-        sprite('smoke', e.x, y, e.y, sz * (0.5 + p * 1.1), COL.fire, Math.max(0, 1 - p * 1.2) * 0.9, k);
-        sprite('smoke', e.x, y, e.y, sz * (0.7 + p * 1.5), COL.smoke, Math.max(0, 0.6 - p * 0.6), k + 1);
-        sprite('ring', e.x, y, e.y, sz * (0.4 + p * 2.6), COL.shock, Math.max(0, 0.7 - p) * 0.7);
+        sprite('flare', ex, y, ey, sz * (0.8 + p * 0.6), COL.flash, Math.max(0, 1 - p * 3));
+        sprite('smoke', ex, y, ey, sz * (0.5 + p * 1.1), COL.fire, Math.max(0, 1 - p * 1.2) * 0.9, k);
+        sprite('smoke', ex, y, ey, sz * (0.7 + p * 1.5), COL.smoke, Math.max(0, 0.6 - p * 0.6), k + 1);
+        sprite('ring', ex, y, ey, sz * (0.4 + p * 2.6), COL.shock, Math.max(0, 0.7 - p) * 0.7);
         const nd0 = e.big ? 40 : 18;
         for (let j = 0; j < nd0 && nd < MAX_DEBRIS; j++) {
           const th = hashf(k, j) * Math.PI * 2, ph = (hashf(k, j + 50) - 0.5) * Math.PI, sp = (0.3 + hashf(k, j + 99)) * sz * 1.4;
           const q = p * sp;
-          dp[nd * 3] = e.x + Math.cos(th) * Math.cos(ph) * q; dp[nd * 3 + 1] = y + Math.sin(ph) * q; dp[nd * 3 + 2] = e.y + Math.sin(th) * Math.cos(ph) * q;
+          dp[nd * 3] = ex + Math.cos(th) * Math.cos(ph) * q; dp[nd * 3 + 1] = y + Math.sin(ph) * q; dp[nd * 3 + 2] = ey + Math.sin(th) * Math.cos(ph) * q;
           const b = Math.max(0, 1 - p) * 2;
           dc[nd * 3] = 2.4 * b; dc[nd * 3 + 1] = 1.1 * b; dc[nd * 3 + 2] = 0.4 * b;
           ds[nd] = 0.06 + hashf(k, j + 7) * 0.06;
@@ -832,17 +883,17 @@
         if (p > 1) continue;
         const c = R.S.units[e.i].side === 0 ? COL.jumpH : COL.jumpZ;
         const sz = Math.max(len * 6, 1.2);
-        sprite('flare', e.x, y, e.y, sz * (e.kind === 'arrive' ? 1.6 - p : 0.6 + p), c, 1 - p);
-        if (e.kind === 'arrive') sprite('ring', e.x, y, e.y, sz * (0.4 + p * 2.5), c, (1 - p) * 0.7);
-        if (e.kind !== 'arrive') sprite('spark', e.x, y, e.y, sz * 1.4 * (1 - p), c, 1 - p, k);
+        sprite('flare', ex, y, ey, sz * (e.kind === 'arrive' ? 1.6 - p : 0.6 + p), c, 1 - p);
+        if (e.kind === 'arrive') sprite('ring', ex, y, ey, sz * (0.4 + p * 2.5), c, (1 - p) * 0.7);
+        if (e.kind !== 'arrive') sprite('spark', ex, y, ey, sz * 1.4 * (1 - p), c, 1 - p, k);
       } else if (e.kind === 'laneDepart' || e.kind === 'laneArrive') {
         const dur = simDur(5, 0.9), p = age / dur;
         if (p > 1) continue;
-        sprite('flare', e.x, y, e.y, Math.max(len * 5, 1) * (1 - p * 0.5), COL.jumpZ, (1 - p) * 0.9);
+        sprite('flare', ex, y, ey, Math.max(len * 5, 1) * (1 - p * 0.5), COL.jumpZ, (1 - p) * 0.9);
         if (e.kind === 'laneDepart' && nb < MAX_BEAM) {
           // レーン上を走る光の筋
           const p6 = nb * 6, a = (1 - p) * 1.4;
-          bp[p6] = e.x; bp[p6 + 1] = y; bp[p6 + 2] = e.y; bp[p6 + 3] = e.tx; bp[p6 + 4] = y; bp[p6 + 5] = e.ty;
+          bp[p6] = ex; bp[p6 + 1] = y; bp[p6 + 2] = ey; bp[p6 + 3] = e.tx; bp[p6 + 4] = y; bp[p6 + 5] = e.ty;
           bc[p6] = COL.jumpZ.r * a; bc[p6 + 1] = COL.jumpZ.g * a; bc[p6 + 2] = COL.jumpZ.b * a;
           bc[p6 + 3] = COL.jumpZ.r * a * 0.3; bc[p6 + 4] = COL.jumpZ.g * a * 0.3; bc[p6 + 5] = COL.jumpZ.b * a * 0.3;
           nb++;
@@ -1005,8 +1056,34 @@
     camera.lookAt(cam.look);
   }
 
+  // WASD で自由カメラを動かす: W/S 前後、A/D 左右、E/Q 上下、Shift で速く。速さは見ている点までの距離に比例
+  const held = new Set();
+  const MOVE_KEYS = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, KeyQ: 1, KeyE: 1 };
+  function flyCamera(dtReal) {
+    let any = false;
+    for (const c of held) if (MOVE_KEYS[c]) { any = true; break; }
+    if (!any) return;
+    const fwd = tmpV.set(0, 0, 0), right = tmpV2.set(0, 0, 0);
+    camera.getWorldDirection(fwd);
+    fwd.y = 0;
+    if (fwd.lengthSq() < 1e-6) fwd.set(0, 1, 0).applyQuaternion(camera.quaternion).setY(0);
+    fwd.normalize();
+    right.set(-fwd.z, 0, fwd.x);
+    const mx = (held.has('KeyD') ? 1 : 0) - (held.has('KeyA') ? 1 : 0);
+    const mz = (held.has('KeyW') ? 1 : 0) - (held.has('KeyS') ? 1 : 0);
+    const my = (held.has('KeyE') ? 1 : 0) - (held.has('KeyQ') ? 1 : 0);
+    const L = Math.hypot(mx, my, mz);
+    if (!L) return;
+    const fast = held.has('ShiftLeft') || held.has('ShiftRight') ? 3 : 1;
+    const sp = Math.max(camera.position.distanceTo(controls.target), 2) * 0.7 * fast * dtReal / L;
+    const dx = (fwd.x * mz + right.x * mx) * sp, dy = my * sp, dz = (fwd.z * mz + right.z * mx) * sp;
+    camera.position.x += dx; camera.position.y += dy; camera.position.z += dz;
+    controls.target.x += dx; controls.target.y += dy; controls.target.z += dz;
+  }
+
   function updateCamera(dtReal) {
     if (V.cam === 'free') {
+      flyCamera(dtReal);
       controls.update();
       return;
     }
@@ -1306,6 +1383,7 @@
         if (V.vt >= V.R.end) { V.vt = V.R.end; V.playing = false; updatePlayBtn(); }
       }
       const fa = frameAt(V.vt);
+      updateSpread(fa, dtReal);
       updateShips(fa, dtReal);
       const fields = updateFields(fa);
       updateLanes(fa, fields);
@@ -1334,6 +1412,7 @@
     filmPass.enabled = o.film;
     $('optBloomOut').textContent = o.bloom.toFixed(2);
     $('optHeightOut').textContent = o.height.toFixed(1);
+    $('optSpreadOut').textContent = o.spread.toFixed(1);
     $('optShipScaleOut').textContent = o.shipScale.toFixed(1);
     world.laneKey = '';
   }
@@ -1353,7 +1432,7 @@
       if (V.playing) $('titlecard').classList.add('gone');
       updatePlayBtn();
     };
-    $('seek').addEventListener('input', (e) => { V.seeking = true; V.vt = +e.target.value; updatePlayBtn(); });
+    $('seek').addEventListener('input', (e) => { V.seeking = true; V.vt = +e.target.value; world.spreadCut = true; updatePlayBtn(); });
     $('seek').addEventListener('change', () => { V.seeking = false; });
     for (const b of document.querySelectorAll('#camSeg button')) b.onclick = () => setCam(b.dataset.cam);
     syncCamButtons();
@@ -1415,7 +1494,7 @@
       $(id).checked = !!V.opts[k];
       $(id).onchange = (e) => { V.opts[k] = e.target.checked; applyOpts(); saveOpts(); };
     }
-    for (const [id, k] of [['optBloom', 'bloom'], ['optHeight', 'height'], ['optShipScale', 'shipScale']]) {
+    for (const [id, k] of [['optBloom', 'bloom'], ['optHeight', 'height'], ['optSpread', 'spread'], ['optShipScale', 'shipScale']]) {
       $(id).value = String(V.opts[k]);
       $(id).oninput = (e) => { V.opts[k] = +e.target.value; applyOpts(); saveOpts(); };
     }
@@ -1433,17 +1512,26 @@
     // キー操作
     document.addEventListener('keydown', (e) => {
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (MOVE_KEYS[e.code] || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        held.add(e.code);
+        if (MOVE_KEYS[e.code]) { e.preventDefault(); if (V.cam !== 'free') setCam('free'); }
+        wake();
+        return;
+      }
       const k = e.key;
       if (k === ' ') { e.preventDefault(); $('playBtn').click(); }
       else if (k >= '1' && k <= '5') setCam(['director', 'combat', 'follow', 'overview', 'free'][+k - 1]);
       else if (k === 'f' || k === 'F') $('fsBtn').click();
       else if (k === 'r' || k === 'R') toggleRec();
       else if (k === 'h' || k === 'H') { V.opts.hud = !V.opts.hud; applyOpts(); }
-      else if (k === 'ArrowRight') V.vt = Math.min(V.R.end, V.vt + Math.max(30, V.speed * 5));
-      else if (k === 'ArrowLeft') V.vt = Math.max(0, V.vt - Math.max(30, V.speed * 5));
+      else if (k === 'ArrowRight') { V.vt = Math.min(V.R.end, V.vt + Math.max(30, V.speed * 5)); world.spreadCut = true; }
+      else if (k === 'ArrowLeft') { V.vt = Math.max(0, V.vt - Math.max(30, V.speed * 5)); world.spreadCut = true; }
       else if (k === 'Escape') { for (const d of document.querySelectorAll('.drawer')) d.classList.remove('open'); }
       wake();
     });
+    document.addEventListener('keyup', (e) => held.delete(e.code));
+    window.addEventListener('blur', () => held.clear());
     // 操作が止まったら操作バーを隠す
     let idleTimer = 0;
     function wake() {
@@ -1488,8 +1576,9 @@
   // 開発者ツールやテストから触れるように
   window.Viewer3D = {
     V, setCam, loadSource, presetSource, toggleRec,
-    seek: (t) => { V.vt = clamp(t, 0, V.R.end); },
+    seek: (t) => { V.vt = clamp(t, 0, V.R.end); world.spreadCut = true; },
     play: () => { V.playing = true; updatePlayBtn(); },
+    view: () => ({ camera, controls }),
     stats: () => ({ batches: world.batches.length, ships: world.batches.reduce((a, b) => a + b.meshes[0].count, 0), sprites: spriteN, shots: V.R.nShots, flashes: V.R.flashes.length, models: world.batches.map((b) => b.tid + ':' + b.model.source) }),
   };
 

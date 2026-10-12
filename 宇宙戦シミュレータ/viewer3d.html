@@ -190,7 +190,7 @@ body.no-letterbox .card { bottom: 86px; }
     <button data-cam="combat" title="いちばん激しい交戦を追う（2）">交戦</button>
     <button data-cam="follow" title="選んだ艦を追う（3）。艦をクリックで選ぶ">追尾</button>
     <button data-cam="overview" title="戦場全体（4）">俯瞰</button>
-    <button data-cam="free" title="マウスで自由に動かす（5）">自由</button>
+    <button data-cam="free" title="マウスと WASD で自由に動かす（5）。W/S 前後・A/D 左右・E/Q 上下・Shift で速く">自由</button>
   </div>
 </div>
 
@@ -245,6 +245,7 @@ body.no-letterbox .card { bottom: 86px; }
     <label class="chk"><input type="checkbox" id="optFilm" checked>フィルムの質感（粒子・周辺減光）</label>
     <div class="range"><span>光のにじみ</span><input type="range" id="optBloom" min="0" max="2" step="0.05" value="1"><output id="optBloomOut">1.00</output></div>
     <div class="range"><span>高さのずれ</span><input type="range" id="optHeight" min="0" max="3" step="0.1" value="1"><output id="optHeightOut">1.0</output></div>
+    <div class="range" title="計算ではほぼ同じ場所に寄った大群を、水平に広げて見せる"><span>群れの横の散らし</span><input type="range" id="optSpread" min="0" max="3" step="0.1" value="1"><output id="optSpreadOut">1.0</output></div>
     <div class="range"><span>艦の大きさ</span><input type="range" id="optShipScale" min="0.2" max="3" step="0.1" value="1"><output id="optShipScaleOut">1.0</output></div>
     <p>高さは見た目だけのものです。計算は平面で行っているので、距離は2Dの画面と少しだけずれて見えます。艦の大きさは見やすさのために実物（数km）よりはるかに大きくしています。</p>
     <h3>録画</h3>

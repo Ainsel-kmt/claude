@@ -48,6 +48,7 @@
    "wInterval": 20,
    "wAccuracy": 0.8,
    "wFalloff": 0,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 100,
    "jump": "none",

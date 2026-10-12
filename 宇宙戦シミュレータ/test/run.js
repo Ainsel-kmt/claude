@@ -162,6 +162,59 @@ for (const p of P.SCENARIOS) {
   check('全艦撤退なら相手の勝ち（撤退）', S.result.winner === 1 && S.result.reason === 'retreat', S.result);
 }
 
+// ---- 救援: 手が空いた護衛は、攻められている味方の拠点へ向かう（通信艦が随伴していても待ち合わない）
+{
+  const st = clone(T.base); st.wDamage = 0; st.fieldOn = false; st.hp = 1e7;
+  const g = clone(T.guard); g.lockTime = 0;
+  const c = clone(T.comms); c.lockTime = 0; c.commsResync = 0;
+  const foe = clone(T.generic); foe.ai = 'static'; foe.speed = 0;
+  const units = [
+    { type: 'st', side: 0, x: 0, y: 0 },
+    ...line('g', 0, 6, 200, 0, 0.5),
+    { type: 'c', side: 0, x: 201, y: 0 },
+    { type: 'foe', side: 1, x: 2, y: 0 },
+  ];
+  const S = runFor(scn({ st, g, c, foe }, units), 30 * 60);
+  const d = Math.min(...S.units.filter((u) => u.tid === 'g').map((u) => Math.hypot(u.x, u.y)));
+  check('救援: 護衛が攻められている拠点のそばへ来る', d < 15, d);
+  check('救援の出来事が出る', S.events.some((e) => e.kind === 'relief'));
+  // 情報共有がなければ、救援要請は光の速さで届く（200光秒先なら約200秒後）
+  const s2 = scn({ st, g, c, foe }, units, { sides: [{ name: 'A', reaction: 0, sharing: 'local' }, { name: 'B', reaction: 0, sharing: 'always' }] });
+  const S2 = runFor(s2, 150);
+  check('情報共有なし: 光が届く前は救援に出ない', S2.units[1].reliefId < 0, S2.units[1].reliefId);
+  E.runUntil(S2, 400);
+  check('情報共有なし: 光が届いたら救援に出る', S2.units[1].reliefId === 0, S2.units[1].reliefId);
+}
+
+// ---- 持ち場防衛の艦は、守っていた拠点を失うと護衛に切り替える
+{
+  const st = clone(T.base); st.wDamage = 0; st.fieldOn = false; st.hp = 50; st.shield = 0; st.shieldRegen = 0;
+  const g = clone(T.guard); g.wDamage = 0; g.hp = 1e6;
+  const foe = clone(T.generic); foe.ai = 'static'; foe.speed = 0; foe.wAccuracy = 1; foe.wRange = 4; foe.priority = 'key';
+  const S = runFor(scn({ st, g, foe }, [
+    { type: 'st', side: 0, x: 0, y: 0 },
+    { type: 'g', side: 0, x: -12, y: 0, ai: 'hold' },
+    { type: 'foe', side: 1, x: 3, y: 0 },
+  ]), 10 * 60);
+  check('拠点を失った持ち場防衛の艦は護衛になる', !S.units[0].alive && S.units[1].ai === 'escort', { base: S.units[0].alive, ai: S.units[1].ai });
+  check('切り替えの出来事が出る', S.events.some((e) => e.kind === 'stationLost'));
+}
+
+// ---- 砲門が複数あれば、射程内の別々の敵を同時に撃つ
+{
+  const fort = clone(T.base); fort.fieldOn = false; fort.wAccuracy = 1; fort.wFalloff = 0; fort.wRange = 6; fort.wInterval = 20; fort.wDamage = 10;
+  const foe = clone(T.generic); foe.wDamage = 0; foe.ai = 'static'; foe.speed = 0; foe.hp = 1000;
+  const mk = (mounts) => {
+    const f = Object.assign(clone(fort), { wMounts: mounts });
+    return runFor(scn({ f, foe }, [{ type: 'f', side: 0, x: 0, y: 0 }, ...line('foe', 1, 4, 3, 0, 1)]), 40);
+  };
+  const hit = (S) => S.units.filter((u) => u.side === 1 && u.hp < 1000).length;
+  check('砲門1: 1隻だけ撃つ', hit(mk(1)) === 1, hit(mk(1)));
+  check('砲門4: 4隻を同時に撃つ', hit(mk(4)) === 4, hit(mk(4)));
+  const S6 = mk(6);
+  check('砲門が敵より多ければ、余りは標的に重ねる', S6.units.filter((u) => u.side === 1).reduce((a, u) => a + (1000 - u.hp), 0) >= 60, S6.units.map((u) => u.hp));
+}
+
 // ---- 時間切れの判定
 {
   const g = clone(T.generic); g.wDamage = 0;

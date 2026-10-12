@@ -1,6 +1,6 @@
 {
  "name": "大規模会戦: S星系決戦",
- "note": "第7段階と第8段階をひとつにした想定（約370隻）。ザイレンはH2の第1波（ナーム級110）で人類主力を押し、予備（ナーム級70）がT+60分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級40）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦5・ガード級60）が待機位置で迎え撃ち、本国からの増援（ノード艦3・ガード級32・静穏場艦2）がT+45分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。数値は仮置き。",
+ "note": "第7段階と第8段階をひとつにした想定（約390隻）。ザイレンはH2の第1波（ナーム級110）で人類主力を押し、予備（ナーム級95）がT+60分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級40）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦5・ガード級60）が待機位置で迎え撃ち、本国からの増援（ノード艦3・ガード級32・静穏場艦2）がT+45分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。数値は仮置き。",
  "settings": {
   "dt": 5,
   "timeLimit": 21600,
@@ -48,6 +48,7 @@
    "wInterval": 30,
    "wAccuracy": 0.95,
    "wFalloff": 0.1,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 60,
    "jump": "free",
@@ -88,6 +89,7 @@
    "wInterval": 30,
    "wAccuracy": 0.9,
    "wFalloff": 0.1,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 30,
    "jump": "free",
@@ -128,6 +130,7 @@
    "wInterval": 30,
    "wAccuracy": 0,
    "wFalloff": 0,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 60,
    "jump": "free",
@@ -168,6 +171,7 @@
    "wInterval": 30,
    "wAccuracy": 0,
    "wFalloff": 0,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 30,
    "jump": "free",
@@ -208,6 +212,7 @@
    "wInterval": 30,
    "wAccuracy": 0.8,
    "wFalloff": 0.2,
+   "wMounts": 1,
    "speed": 0.08,
    "sensor": 300,
    "jump": "free",
@@ -244,10 +249,11 @@
    "shieldRegen": 3,
    "evasion": 0,
    "wDamage": 50,
-   "wRange": 3,
+   "wRange": 6,
    "wInterval": 20,
    "wAccuracy": 0.9,
    "wFalloff": 0.1,
+   "wMounts": 6,
    "speed": 0,
    "sensor": 120,
    "jump": "none",
@@ -288,6 +294,7 @@
    "wInterval": 30,
    "wAccuracy": 0.7,
    "wFalloff": 0.3,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 200,
    "jump": "lane",
@@ -328,6 +335,7 @@
    "wInterval": 30,
    "wAccuracy": 0.8,
    "wFalloff": 0.2,
+   "wMounts": 1,
    "speed": 0.04,
    "sensor": 200,
    "jump": "lane",
@@ -368,6 +376,7 @@
    "wInterval": 30,
    "wAccuracy": 0,
    "wFalloff": 0,
+   "wMounts": 1,
    "speed": 0.05,
    "sensor": 200,
    "jump": "lane",
@@ -404,10 +413,11 @@
    "shieldRegen": 3,
    "evasion": 0,
    "wDamage": 50,
-   "wRange": 3,
+   "wRange": 6,
    "wInterval": 20,
    "wAccuracy": 0.9,
    "wFalloff": 0.1,
+   "wMounts": 6,
    "speed": 0,
    "sensor": 120,
    "jump": "none",
@@ -3002,6 +3012,181 @@
    "side": 1,
    "x": 378.31,
    "y": 32.16,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 379.78,
+   "y": 27.25,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.03,
+   "y": 31.9,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.2,
+   "y": 29.97,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.1,
+   "y": 28.12,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 379.72,
+   "y": 32.83,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 378.28,
+   "y": 27.72,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.83,
+   "y": 30.53,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.54,
+   "y": 31.53,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 380.78,
+   "y": 27.19,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 381.33,
+   "y": 32.62,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.24,
+   "y": 28.96,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.76,
+   "y": 28.89,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 378.71,
+   "y": 32.69,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 379.13,
+   "y": 27.12,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.6,
+   "y": 31.54,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.02,
+   "y": 30.63,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 381.78,
+   "y": 27.51,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 380.37,
+   "y": 33.06,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.65,
+   "y": 27.98,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 383.11,
+   "y": 29.9,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 377.76,
+   "y": 32.19,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 380.18,
+   "y": 26.86,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382,
+   "y": 32.45,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 376.85,
+   "y": 29.55,
+   "appear": 3600
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 382.64,
+   "y": 28.2,
    "appear": 3600
   },
   {

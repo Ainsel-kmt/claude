@@ -51,7 +51,7 @@
     base: {
       name: '人類拠点', abbr: '拠', shape: 'star', size: 2, cost: 20, origin: 0,
       hp: 6000, shield: 4000, shieldRegen: 3, evasion: 0,
-      wDamage: 50, wRange: 3, wInterval: 20, wAccuracy: 0.9, wFalloff: 0.1,
+      wDamage: 50, wRange: 6, wInterval: 20, wAccuracy: 0.9, wFalloff: 0.1, wMounts: 6,
       speed: 0, sensor: 120, jump: 'none', lockTime: 0,
       ai: 'static', priority: 'nearest', retreatAt: 0,
       fieldOn: true, fieldRadius: 180, fieldDeploy: 0, fieldDuration: 0, fieldMode: 'immediate',
@@ -206,7 +206,7 @@
   // o で兵力や時刻を変えられる（釣り合いを調べるため）
   function grandBattle(o) {
     o = Object.assign({
-      w1: 110, w2: 70, fl: 40,            // ザイレン: 第1波・予備・迂回部隊のナーム級
+      w1: 110, w2: 95, fl: 40,            // ザイレン: 第1波・予備・迂回部隊のナーム級
       w2At: 60,                           // ザイレン予備が後方のハブに着く時刻（分）
       n1: 5, g1: 60,                      // 人類主力のノード艦・ガード級
       n2: 3, g2: 32, rAt: 45,             // 人類増援のノード艦・ガード級・到着時刻（分）
@@ -252,7 +252,7 @@
     types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), { name: '人類第2拠点', abbr: '拠2', hp: 4000, shield: 2500, fieldRadius: 80, cost: 15, known: true });
     return {
       name: '大規模会戦: S星系決戦',
-      note: '第7段階と第8段階をひとつにした想定（約370隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。数値は仮置き。',
+      note: '第7段階と第8段階をひとつにした想定（約390隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。数値は仮置き。',
       settings: { timeLimit: 6 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
