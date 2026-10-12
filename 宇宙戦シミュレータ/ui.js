@@ -529,6 +529,19 @@
         }
       }
       ctx.setLineDash([]);
+      // シェル・誘導弾の爆発: 当たった点に爆発の半径の輪
+      if (app.sim) {
+        ctx.beginPath();
+        let anyB = false;
+        for (let i = 0; i < s.length; i += W) {
+          if (s[i + 5] !== side || !(s[i + 4] > 0) || (s[i + 9] !== K.shell && s[i + 9] !== K.missile)) continue;
+          const su = app.sim.units[s[i + 7]], r = su ? su.def.sBlast : 0;
+          if (!(r > 0)) continue;
+          const x = sx(s[i + 2]), y = sy(s[i + 3]), rr = Math.max(3, r * app.view.s);
+          ctx.moveTo(x + rr, y); ctx.arc(x, y, rr, 0, Math.PI * 2); anyB = true;
+        }
+        if (anyB) { ctx.fillStyle = rgba(col, 0.18); ctx.fill(); ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 1.2; ctx.stroke(); }
+      }
       // 迎撃（落とせたものだけ）
       ctx.beginPath();
       let any = false;
@@ -1104,6 +1117,7 @@
     if (fl & FL.lay) st.push('レーンを延伸中');
     if (fl & FL.retreat) st.push('撤退中');
     if (fl & FL.wait) st.push('ロック明けを待っている');
+    if (fl & FL.resupply) st.push('弾の補充に戻っている');
     if (fl & FL.lock) st.push((d.jump === 'lane' ? '再ジャンプまで' : 'ロックタイム残り') + ' ' + (u.lockS >= 60 ? num(u.lockS / 60, 0) + '分' : num(u.lockS, 0) + '秒'));
     if (fl & FL.linked) st.push(d.linkOn ? 'リンクの中枢' : 'リンク中');
     return st;
@@ -1542,6 +1556,11 @@
           }
         }
         if (d.sBypass > 0) t += '損害の' + num(d.sBypass * 100, 0) + '%はウォードを素通りする。';
+        if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone') t += '当たると半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の爆発。';
+        if (d.sAmmo > 0) {
+          const rt = (scn.settings && scn.settings.resupplyTime) || E.DEFAULT_SETTINGS.resupplyTime;
+          t += '弾は' + Math.floor(d.sAmmo) + '発（拠点の近くで1発' + num(rt / 60, 1) + '分ずつ補充' + (d.sReturn ? '。尽きたら補充に戻る' : '') + '）。';
+        }
         html += '<p class="help">' + esc(t) + '</p>';
       }
       if (g.g === '機動' && d.speed > 0) {

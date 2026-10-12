@@ -13,7 +13,9 @@
   "laneGap": 3,
   "retarget": 15,
   "drawMargin": 0.05,
-  "shellDodge": 5
+  "shellDodge": 5,
+  "resupplyRange": 10,
+  "resupplyTime": 120
  },
  "sides": [
   {
@@ -83,6 +85,10 @@
    "sSpeed": 0.02,
    "sBypass": 1,
    "sLife": 600,
+   "sBlast": 0,
+   "sAmmo": 0,
+   "sReturn": false,
+   "sMinHit": 0,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,

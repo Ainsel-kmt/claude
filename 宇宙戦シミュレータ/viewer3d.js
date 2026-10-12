@@ -887,9 +887,9 @@
       nb++;
     };
     if (V.opts.beams && R.nProj) {
-      const fade = Math.max(1.2, V.speed * 0.22);
+      const fade = Math.max(1.2, V.speed * 0.22), keep = Math.max(fade, simDur(10, 1.6));
       let lo = 0, hi = R.nProj;
-      while (lo < hi) { const mid = (lo + hi) >> 1; if (R.proj[mid * SW + 6] < vt - fade) lo = mid + 1; else hi = mid; }
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (R.proj[mid * SW + 6] < vt - keep) lo = mid + 1; else hi = mid; }
       for (let k = lo; k < R.nProj; k++) {
         const o = k * SW, t = R.proj[o + 6];
         if (t - R.maxFlight > vt) break;
@@ -912,9 +912,19 @@
           head(x, y, z, kind === K.missile ? [1.15, 1.0, 0.85] : c, 1, kind === K.missile ? 0.2 : 0.14);
         } else {
           const after = vt - t, q = 1 - after / fade;
-          if (q <= 0) continue;
-          if (hitv > 0) sprite('spark', tx, ty, tz, 0.5 * q + 0.15, COL.spark, q, hashf(k, 5) * 6);
-          else if (hitv < 0) sprite('flare', tx, ty + arc * 0.2, tz, 0.4 * q + 0.1, COL.flash, q * 0.8);
+          if (after > keep) continue;
+          if (hitv > 0) {
+            // 爆発（半径 sBlast）。爆発のない弾は火花だけ
+            const br = R.S.units[sid] ? R.S.units[sid].def.sBlast : 0;
+            if (br > 0) {
+              const big = simDur(10, 1.6), qq = 1 - after / big;
+              if (qq > 0) {
+                sprite('flare', tx, ty, tz, br * 2.6 * (0.7 + (1 - qq) * 0.6), COL.flash, qq);
+                sprite('ring', tx, ty, tz, br * 2 * (0.3 + (1 - qq) * 1.2), COL.shock, qq * 0.8);
+              }
+            } else if (q > 0) sprite('spark', tx, ty, tz, 0.5 * q + 0.15, COL.spark, q, hashf(k, 5) * 6);
+          }
+          else if (hitv < 0 && q > 0) sprite('flare', tx, ty + arc * 0.2, tz, 0.4 * q + 0.1, COL.flash, q * 0.8);
         }
       }
     }
@@ -949,6 +959,10 @@
     const F = R.flashes, maxDur = simDur(60, 2.5);
     let lo = 0, hi = F.length;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (F[mid].t < vt - maxDur) lo = mid + 1; else hi = mid; }
+    // 同時に沈む艦が多いとき（爆発で群れごと沈むなど）は、閃光を弱めて白飛びを防ぐ
+    let nDeath = 0;
+    for (let k = lo; k < F.length && F[k].t <= vt; k++) if (F[k].kind === 'death' && vt - F[k].t < simDur(8, 1.6) * 0.4) nDeath++;
+    const glare = Math.min(1, 10 / Math.max(1, nDeath));
     for (let k = lo; k < F.length; k++) {
       const e = F[k];
       if (e.t > vt) break;
@@ -958,10 +972,10 @@
         const dur = simDur(e.big ? 14 : 8, e.big ? 2.4 : 1.6), p = age / dur;
         if (p > 1) continue;
         const sz = Math.max(len * 2.2, 0.3) * (e.big ? 1.6 : 1);
-        sprite('flare', ex, y, ey, sz * (0.8 + p * 0.6), COL.flash, Math.max(0, 1 - p * 3));
-        sprite('smoke', ex, y, ey, sz * (0.5 + p * 1.1), COL.fire, Math.max(0, 1 - p * 1.2) * 0.9, k);
+        sprite('flare', ex, y, ey, sz * (0.8 + p * 0.6), COL.flash, Math.max(0, 1 - p * 3) * glare);
+        sprite('smoke', ex, y, ey, sz * (0.5 + p * 1.1), COL.fire, Math.max(0, 1 - p * 1.2) * 0.9 * glare, k);
         sprite('smoke', ex, y, ey, sz * (0.7 + p * 1.5), COL.smoke, Math.max(0, 0.6 - p * 0.6), k + 1);
-        sprite('ring', ex, y, ey, sz * (0.4 + p * 2.6), COL.shock, Math.max(0, 0.7 - p) * 0.7);
+        sprite('ring', ex, y, ey, sz * (0.4 + p * 2.6), COL.shock, Math.max(0, 0.7 - p) * 0.7 * glare);
         const nd0 = e.big ? 40 : 18;
         for (let j = 0; j < nd0 && nd < MAX_DEBRIS; j++) {
           const th = hashf(k, j) * Math.PI * 2, ph = (hashf(k, j + 50) - 0.5) * Math.PI, sp = (0.3 + hashf(k, j + 99)) * sz * 1.4;
@@ -1300,6 +1314,7 @@
       if (fl & FL.field) st.push('妨害場を維持中');
       if (fl & FL.lay) st.push('レーンを延伸中');
       if (fl & FL.retreat) st.push('撤退中');
+      if (fl & FL.resupply) st.push('弾の補充に戻っている');
       if (fl & FL.lock) st.push('ロックタイム残り ' + Math.round(f0.u[o + 5] / 60) + '分');
       if (fl & FL.linked) st.push('リンク中');
     }

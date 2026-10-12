@@ -256,6 +256,72 @@ for (const p of P.SCENARIOS) {
   check('副兵装のない艦は副兵装を撃たない', E.runOnce(s0, 1).sides[0].arms.fired === 0);
 }
 
+// ---- シェル（魚雷のような運用）: 爆発・弾数・補充・撃つ見込み・雷撃
+{
+  // jump: free にしておく（speed 0 で jump: none だと拠点扱いになり、自分で補充してしまう）
+  const torp = (extra) => Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'static', speed: 0, sensor: 100, jump: 'free', lockTime: 0,
+    sOn: true, sKind: 'shell', sDamage: 600, sRange: 5, sInterval: 20, sAccuracy: 1, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 1,
+    sBlast: 0.2, sAmmo: 0, sMinHit: 0, sReturn: false,
+  }, extra || {});
+  const still = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, shield: 0 });
+  const lost = (S, i) => 1e6 - S.units[i].hp;
+
+  // 爆発: 直撃した艦は威力いっぱい、近くの敵は距離で減る、半径の外と味方は無傷
+  const B = runFor(scn({ a: torp({ sInterval: 10000 }), b: still, f: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 3, y: 0 },
+    { type: 'b', side: 1, x: 3, y: 0.1 },
+    { type: 'b', side: 1, x: 3, y: 0.3 },
+    { type: 'f', side: 0, x: 3, y: -0.05 },
+  ], { settings: { timeLimit: 3600 } }), 600);
+  const hitIdx = [1, 2].find((i) => lost(B, i) >= 600);
+  check('シェルの直撃は威力いっぱい', hitIdx != null, [lost(B, 1), lost(B, 2)]);
+  const other = hitIdx === 1 ? 2 : 1;
+  check('爆発は半径の中の敵に距離で減る損害', lost(B, other) > 200 && lost(B, other) < 600, lost(B, other));
+  check('爆発は半径の外と味方には届かない', lost(B, 3) === 0 && lost(B, 4) === 0, [lost(B, 3), lost(B, 4)]);
+
+  // 弾数: 撃ち尽くすと撃てない
+  const A = runFor(scn({ a: torp({ sAmmo: 2 }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 1200);
+  check('弾数2なら2発で撃ち止む', A.arms[0].fired === 2 && A.units[0].ammo === 0, { fired: A.arms[0].fired, ammo: A.units[0].ammo });
+
+  // 補充: 味方の拠点の近くにいると、1発ずつ補充されてまた撃つ
+  const st = Object.assign(clone(T.base), { wDamage: 0, sOn: false, fieldOn: false, pdOn: false, hp: 1e6 });
+  const R1 = runFor(scn({ a: torp({ sAmmo: 2 }), b: still, st }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }, { type: 'st', side: 0, x: -2, y: 0 },
+  ], { settings: { timeLimit: 3600, resupplyTime: 60 } }), 1200);
+  check('拠点の近くでは補充されて撃ち続ける', R1.arms[0].fired > 4 && R1.arms[0].resupplied > 0, R1.arms[0]);
+
+  // 補充に戻る: 撃ち尽くした艦は拠点へ向かい、満タンで戻る
+  const ret = torp({ sAmmo: 1, sReturn: true, ai: 'assault', speed: 0.05, jump: 'none', sRange: 3 });
+  const R2 = runFor(scn({ a: ret, b: still, st }, [
+    { type: 'a', side: 0, x: 40, y: 0 }, { type: 'b', side: 1, x: 42, y: 0 }, { type: 'st', side: 0, x: 0, y: 0 },
+  ], { settings: { timeLimit: 3 * 3600, resupplyTime: 60 } }), 3600);
+  check('撃ち尽くした艦は補充に戻る', R2.events.some((e) => e.kind === 'resupplyGo'), R2.units[0].x);
+  check('補充を終えると戦いに戻る', R2.events.some((e) => e.kind === 'resupplyDone'));
+
+  // 撃つ見込み: 届くまでが長くて動ける艦には撃たず、動けない艦には撃つ
+  const mover = Object.assign(clone(still), { speed: 0.05 });
+  const m1 = runFor(scn({ a: torp({ sMinHit: 0.3, sSpeed: 0.02 }), b: mover }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
+  const m2 = runFor(scn({ a: torp({ sMinHit: 0.3, sSpeed: 0.02 }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
+  check('撃つ見込み: 当たりにくい敵には撃たない', m1.arms[0].fired === 0, m1.arms[0].fired);
+  check('撃つ見込み: 動けない敵には撃つ', m2.arms[0].fired > 0, m2.arms[0].fired);
+
+  // 雷撃: 敵が遠いうちは艦隊に付き、10光秒以内に来たら通常航行で切り込む
+  const dd = torp({ ai: 'strike', speed: 0.05, jump: 'free', lockTime: 0, sRange: 0.4, sAmmo: 4 });
+  const fleet = Object.assign(clone(T.generic), { ai: 'static', speed: 0.05, wDamage: 0 });
+  fleet.wDamage = 1;
+  const far = runFor(scn({ a: dd, g: fleet, b: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'g', side: 0, x: 5, y: 0 }, { type: 'b', side: 1, x: 60, y: 0 },
+  ]), 300);
+  check('雷撃: 敵が遠いうちは艦隊に付く', Math.abs(far.units[0].x - 5) < 3 && !far.units[0].jump, far.units[0].x);
+  const near = runFor(scn({ a: dd, g: fleet, b: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'g', side: 0, x: 0, y: 1 }, { type: 'b', side: 1, x: 8, y: 0 },
+  ]), 300);
+  // 射程0.4光秒なので、撃てたなら標的の間近まで寄っている。ジャンプは使わない
+  check('雷撃: 近づいた敵には通常航行で切り込んで撃つ', near.arms[0].fired > 0 && !near.events.some((e) => e.kind === 'jump'), { x: near.units[0].x, fired: near.arms[0].fired });
+}
+
 // ---- 時間切れの判定
 {
   const g = clone(T.generic); g.wDamage = 0;

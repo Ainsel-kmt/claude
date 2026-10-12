@@ -25,7 +25,7 @@
     // 艦種ごとの既定の長さ（光秒）。実物（数km）よりはるかに大きく誇張している
     const BASE_LENGTH = {
       node: 0.3, guard: 0.16, comms: 0.18, quiet: 0.24, picket: 0.11, base: 2.0, base2: 1.6,
-      narm: 0.14, garmes: 0.45, elda: 0.26, generic: 0.16,
+      narm: 0.14, garmes: 0.45, elda: 0.26, generic: 0.16, destroyer: 0.15, missile: 0.18, carrier: 0.4,
     };
 
     // ---------------------------------------------------------------- 部品
