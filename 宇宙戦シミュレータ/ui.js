@@ -238,8 +238,9 @@
     app.last = now;
     app.simT += dt * (+$('speedSel').value);
     compute(app.simT, 14);
-    const lastT = S.frames[S.frames.length - 1].t;
-    if (app.simT > lastT) app.simT = lastT;
+    // 再生の時刻は「計算が済んだ時刻」で止める。記録フレームは大きなシナリオでは数刻みおきなので、
+    // 最新フレームの時刻で止めると、1コマで進む時間が記録の間隔より短いとき毎回巻き戻って進まなくなる
+    if (app.simT > S.t) app.simT = S.t;
     app.fi = frameAt(app.simT);
     if (S.done && app.fi >= S.frames.length - 1) { app.playing = false; renderTimeline(); }
     renderFrame(false);
