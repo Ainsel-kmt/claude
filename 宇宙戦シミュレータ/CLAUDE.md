@@ -15,7 +15,7 @@ node tools/battle.js sB --set ... --save scenarios/試し.json                  
 node test/run.js                                          # エンジンのテスト
 ```
 
-- プリセット名: `basic`（正面衝突）、`sA`（S星系外縁 A）、`sB`（S星系外縁 B）、`grand`（大規模会戦: S星系決戦。約390隻で1回4〜5秒ほどかかる）、`lan`（同性能の数の差）、`empty`。`scenarios/*.json` も同じ中身
+- プリセット名: `basic`（正面衝突）、`sA`（S星系外縁 A）、`sB`（S星系外縁 B）、`grand`（大規模会戦: S星系決戦。約400隻で1回5秒ほどかかる）、`arms`（副兵装の試し撃ち）、`lan`（同性能の数の差）、`empty`。`scenarios/*.json` も同じ中身
 - 大規模会戦の兵力は `presets.js` の `grandBattle(o)` の引数で変えられる（`P.builders.grandBattle({ w2: 90 })` のように Node から呼べる）
 - `--set` と JSON は**内部の単位**: 時間は秒、距離は光秒、速さは c、割合は 0〜1。画面では分や % で見せているので換算する（45分 → 2700、30% → 0.3）
 - 艦をまとめて変えるときは `"units[type=narm,side=1].ai=hold"` のように条件で選ぶ（`[3]` は4番目、`[*]` は全部）
@@ -33,7 +33,7 @@ node test/run.js                                          # エンジンのテ�
 - `viewer3d.html` / `viewer3d.js` / `viewer3d-models.js`。three.js 0.170 を jsdelivr からモジュールで読む（importmap）。ネット接続が必要
 - 戦いは `engine.js` で計算し直して、記録フレームを再生する（シナリオとシードが同じなら2Dの画面と同じ結果）。2Dの画面からは localStorage の `uchusen-3d-handoff` で受け取る
 - 高さ（3Dの y）は見た目だけ（`computeHeights`）。混んだ群れの水平の散らし（`updateSpread`）も見た目だけ。計算には影響しない
-- 射撃の記録は `SHOT_W` = 9 個ずつ（位置・命中・陣営・時刻・撃った艦・標的）。フレームの間の射撃もすべて次のフレームにためる
+- 射撃の記録は `SHOT_W` = 11 個ずつ（位置・命中・陣営・時刻・撃った艦・標的・種類 `SHOT_KIND`・届くまでの秒数）。シェルと誘導弾は着弾の時刻に記録する。フレームの間の射撃もすべて次のフレームにためる。無人機の位置はフレームの `drones`（`DRONE_W` = 6 個ずつ）
 - モデルの差し替えは `models/README.md`。GLB を置いて `models/models.json` に書き、`node tools/pack-models.js`
 - こちらから見た目は確認できないので、ビューアを変えたら表示の確認をユーザーに頼む
 

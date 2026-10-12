@@ -153,12 +153,14 @@ function summarize(results, scn) {
     wins: [0, 0], draws: 0, winRate: [0, 0], drawRate: 0,
     avgTime: 0, avgKept: [0, 0], avgOnField: [0, 0],
     avgLost: [{}, {}], avgEscaped: [{}, {}], initial: [{}, {}],
+    avgArms: [{}, {}],
   };
   for (const r of results) {
     if (r.winner < 0) sum.draws++; else sum.wins[r.winner]++;
     sum.avgTime += r.t;
     r.sides.forEach((rs, k) => {
       sum.avgKept[k] += rs.kept; sum.avgOnField[k] += rs.onField;
+      for (const [a, v] of Object.entries(rs.arms || {})) sum.avgArms[k][a] = (sum.avgArms[k][a] || 0) + v;
       for (const [tid, b] of Object.entries(rs.byType)) {
         sum.avgLost[k][tid] = (sum.avgLost[k][tid] || 0) + b.lost;
         sum.avgEscaped[k][tid] = (sum.avgEscaped[k][tid] || 0) + b.escaped;
@@ -175,6 +177,7 @@ function summarize(results, scn) {
   for (const k of [0, 1]) {
     for (const tid of Object.keys(sum.avgLost[k])) sum.avgLost[k][tid] /= n;
     for (const tid of Object.keys(sum.avgEscaped[k])) sum.avgEscaped[k][tid] /= n;
+    for (const a of Object.keys(sum.avgArms[k])) sum.avgArms[k][a] /= n;
   }
   sum.typeNames = {};
   for (const [tid, t] of Object.entries(s.types)) sum.typeNames[tid] = t.name;
@@ -183,6 +186,20 @@ function summarize(results, scn) {
 
 const pct = (v) => Math.round(v * 100) + '%';
 const r1 = (v) => String(Math.round(v * 10) / 10);
+
+// 副兵装の数字（使った陣営だけ）
+function armsLines(sum, single) {
+  const L = [];
+  for (const k of [0, 1]) {
+    const a = sum.avgArms[k] || {};
+    if (!a.fired) continue;
+    let t = '  ' + sum.sides[k] + ': ' + (single ? '' : '平均 ') + '発射 ' + r1(a.fired) + '・命中 ' + r1(a.hits || 0);
+    if (a.missiles) t += '・うち誘導弾 ' + r1(a.missiles) + '（迎撃された ' + r1(a.missilesDown || 0) + '）';
+    if (a.drones) t += '・無人機 ' + r1(a.drones) + '機（落とされた ' + r1(a.dronesDown || 0) + '、無人機の命中 ' + r1(a.droneHits || 0) + '発）';
+    L.push(t);
+  }
+  return L.length ? ['副兵装（発射は無人機の発進も1と数える）:'].concat(L) : [];
+}
 
 function formatSummary(sum, single) {
   const L = [];
@@ -195,7 +212,7 @@ function formatSummary(sum, single) {
         L.push('  ' + nm[k] + ' ' + (sum.typeNames[tid] || tid) + ': ' + r1(sum.avgLost[k][tid] || 0) + ' / ' + r1(sum.avgEscaped[k][tid] || 0) + ' / ' + sum.initial[k][tid]);
       }
     }
-    return L.join('\n');
+    return L.concat(armsLines(sum, true)).join('\n');
   }
   L.push('勝率: ' + nm[0] + ' ' + pct(sum.winRate[0]) + '（' + sum.wins[0] + '回） / 引き分け ' + pct(sum.drawRate) + '（' + sum.draws + '回） / ' + nm[1] + ' ' + pct(sum.winRate[1]) + '（' + sum.wins[1] + '回）');
   L.push('平均決着: ' + E.fmtTime(sum.avgTime));
@@ -206,7 +223,7 @@ function formatSummary(sum, single) {
       L.push('  ' + nm[k] + ' ' + (sum.typeNames[tid] || tid) + ': ' + r1(sum.avgLost[k][tid] || 0) + ' / ' + r1(sum.avgEscaped[k][tid] || 0) + ' / ' + sum.initial[k][tid]);
     }
   }
-  return L.join('\n');
+  return L.concat(armsLines(sum, false)).join('\n');
 }
 
 function csvEscape(v) {

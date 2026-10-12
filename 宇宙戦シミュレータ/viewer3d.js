@@ -191,13 +191,20 @@
     const F = S.frames, n = S.units.length;
     const R = { S, F, n, end: S.t, flashes: [], captions: [], marks: S.scn.marks || [] };
     R.h = computeHeights(S);
-    // 射撃（時刻順）
-    let total = 0;
-    for (const f of F) if (f.shots) total += f.shots.length;
-    R.shots = new Float32Array(total);
-    let o = 0;
-    for (const f of F) if (f.shots) { R.shots.set(f.shots, o); o += f.shots.length; }
-    R.nShots = total / SW;
+    // 射撃（時刻順）。シェルと誘導弾は飛んでいる様子を見せるので R.proj に分ける（着弾の時刻順）
+    const K = E.SHOT_KIND;
+    const isProj = (k) => k === K.shell || k === K.missile;
+    let nS = 0, nP = 0;
+    for (const f of F) if (f.shots) for (let i = 0; i < f.shots.length; i += SW) { if (isProj(f.shots[i + 9])) nP++; else nS++; }
+    R.shots = new Float32Array(nS * SW); R.proj = new Float32Array(nP * SW);
+    let oS = 0, oP = 0;
+    R.maxFlight = 0;
+    for (const f of F) if (f.shots) for (let i = 0; i < f.shots.length; i += SW) {
+      const row = f.shots.subarray(i, i + SW);
+      if (isProj(row[9])) { R.proj.set(row, oP); oP += SW; R.maxFlight = Math.max(R.maxFlight, row[10]); }
+      else { R.shots.set(row, oS); oS += SW; }
+    }
+    R.nShots = nS; R.nProj = nP;
     // 状態の変わり目から演出の出来事を作る
     const add = (e) => R.flashes.push(e);
     const maxMove = (u, dt) => u.def.speed * dt * 1.6 + 0.6;
@@ -751,7 +758,7 @@
   // ---------------------------------------------------------------- 演出: 射線・閃光・爆発
 
   const fx = {};
-  const MAX_BEAM = 9000, MAX_SPRITE = 420, MAX_DEBRIS = 6000;
+  const MAX_BEAM = 9000, MAX_SPRITE = 420, MAX_DEBRIS = 6000, MAX_PROJ = 6000;
   function initEffects() {
     // 射線（光速で伸びる線）
     const bg = new THREE.BufferGeometry();
@@ -779,6 +786,15 @@
     fx.debris.frustumCulled = false;
     fx.debris.renderOrder = 6;
     scene.add(fx.debris);
+    // 飛んでいる弾と無人機（点）
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_PROJ * 3), 3));
+    pg.setAttribute('gcolor', new THREE.BufferAttribute(new Float32Array(MAX_PROJ * 3), 3));
+    pg.setAttribute('gsize', new THREE.BufferAttribute(new Float32Array(MAX_PROJ), 1));
+    fx.proj = new THREE.Points(pg, pointMaterial(true));
+    fx.proj.frustumCulled = false;
+    fx.proj.renderOrder = 6;
+    scene.add(fx.proj);
     // ロックタイムの輪（艦のまわりの板ポリ）は sprites を使う
   }
 
@@ -800,7 +816,7 @@
   const hashf = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
   function updateEffects(fa) {
-    const R = V.R, vt = V.vt, off = world.off;
+    const R = V.R, vt = V.vt, off = world.off, K = E.SHOT_KIND;
     spriteN = 0;
     // 射線
     let nb = 0;
@@ -813,9 +829,11 @@
       for (let k = lo; k < R.nShots && nb < MAX_BEAM; k++) {
         const o = k * SW, t = R.shots[o + 6];
         if (t > vt) break;
-        const sid = R.shots[o + 7], tid = R.shots[o + 8], hit = R.shots[o + 4] > 0;
-        const sx = R.shots[o] + off[sid * 2], sz = R.shots[o + 1] + off[sid * 2 + 1], sy = R.h[sid] * V.opts.height;
-        let tx = R.shots[o + 2] + off[tid * 2], tz = R.shots[o + 3] + off[tid * 2 + 1], ty = R.h[tid] * V.opts.height;
+        const sid = R.shots[o + 7], tid = R.shots[o + 8], hit = R.shots[o + 4] > 0, kind = R.shots[o + 9];
+        // 無人機の射撃は標的のそばから（散らしは標的のぶん）、迎撃は撃った艦の高さで、落とした点へ
+        const so = kind === K.drone ? tid : sid, to = tid >= 0 ? tid : sid;
+        const sx = R.shots[o] + off[so * 2], sz = R.shots[o + 1] + off[so * 2 + 1], sy = R.h[so] * V.opts.height + (kind === K.drone ? 0.25 : 0);
+        let tx = R.shots[o + 2] + off[to * 2], tz = R.shots[o + 3] + off[to * 2 + 1], ty = R.h[to] * V.opts.height;
         const travel = Math.max(0.05, Math.hypot(tx - sx, tz - sz, ty - sy));
         if (!hit) {
           // 外れ: 標的の脇を抜けて先へ
@@ -827,6 +845,11 @@
         const after = age - travel;
         let alpha = after > 0 ? clamp(1 - after / fade, 0, 1) : 1;
         if (!hit) alpha *= 0.35;
+        if (kind === K.drone) alpha *= 0.55;
+        if (kind === K.intercept) {
+          alpha *= 0.7;
+          if (hit && after >= 0 && after < fade * 0.6) sprite('spark', tx, ty, tz, 0.35, COL.spark, 1 - after / (fade * 0.6), hashf(k, 4) * 6);
+        }
         if (alpha <= 0.01 || head <= tail) continue;
         const c = bcol[R.shots[o + 5]];
         const ax = lerp(sx, tx, tail), ay = lerp(sy, ty, tail), az = lerp(sz, tz, tail);
@@ -837,7 +860,7 @@
         bc[p + 3] = c.r * alpha; bc[p + 4] = c.g * alpha; bc[p + 5] = c.b * alpha;
         nb++;
         // 着弾: ウォードが残っていれば青白い光、なければ火花
-        if (hit && after >= 0 && after < fade * 0.6) {
+        if (hit && kind !== K.intercept && after >= 0 && after < fade * 0.6) {
           const f0 = R.F[fa.k], sh = f0.u[tid * FW + 3];
           const q = 1 - after / (fade * 0.6);
           if (sh > 0.02) sprite('ring', tx, ty, tz, 0.35 + 0.2 * (1 - q), COL.shield, q * 0.6);
@@ -845,6 +868,77 @@
         }
       }
     }
+    // シェルと誘導弾（飛んでいる弾）と無人機: 光る点と短い尾
+    let np = 0;
+    const pp = fx.proj.geometry.attributes.position.array, pc = fx.proj.geometry.attributes.gcolor.array, ps = fx.proj.geometry.attributes.gsize.array;
+    const SCOL = [[0.6, 0.85, 1.8], [1.9, 0.85, 0.35]];
+    const head = (x, y, z, c, a, size) => {
+      if (np >= MAX_PROJ) return;
+      pp[np * 3] = x; pp[np * 3 + 1] = y; pp[np * 3 + 2] = z;
+      pc[np * 3] = c[0] * a; pc[np * 3 + 1] = c[1] * a; pc[np * 3 + 2] = c[2] * a;
+      ps[np] = size; np++;
+    };
+    const trail = (ax, ay, az, bx, by, bz, c, a) => {
+      if (nb >= MAX_BEAM) return;
+      const p = nb * 6;
+      bp[p] = ax; bp[p + 1] = ay; bp[p + 2] = az; bp[p + 3] = bx; bp[p + 4] = by; bp[p + 5] = bz;
+      bc[p] = 0; bc[p + 1] = 0; bc[p + 2] = 0;
+      bc[p + 3] = c[0] * a; bc[p + 4] = c[1] * a; bc[p + 5] = c[2] * a;
+      nb++;
+    };
+    if (V.opts.beams && R.nProj) {
+      const fade = Math.max(1.2, V.speed * 0.22);
+      let lo = 0, hi = R.nProj;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (R.proj[mid * SW + 6] < vt - fade) lo = mid + 1; else hi = mid; }
+      for (let k = lo; k < R.nProj; k++) {
+        const o = k * SW, t = R.proj[o + 6];
+        if (t - R.maxFlight > vt) break;
+        const fl = R.proj[o + 10], t0 = t - fl;
+        if (t0 > vt) continue;
+        const kind = R.proj[o + 9], hitv = R.proj[o + 4], side = R.proj[o + 5];
+        const sid = R.proj[o + 7], tid = R.proj[o + 8];
+        const sx = R.proj[o] + off[sid * 2], sz = R.proj[o + 1] + off[sid * 2 + 1], sy = R.h[sid] * V.opts.height;
+        const tx = R.proj[o + 2] + off[tid * 2], tz = R.proj[o + 3] + off[tid * 2 + 1], ty = R.h[tid] * V.opts.height;
+        const c = SCOL[side] || SCOL[0];
+        const L = Math.hypot(tx - sx, tz - sz);
+        const arc = kind === K.missile ? Math.min(2.5, L * 0.12) : 0;
+        if (vt <= t) {
+          const p = fl > 0 ? (vt - t0) / fl : 1;
+          const x = lerp(sx, tx, p), z = lerp(sz, tz, p), y = lerp(sy, ty, p) + Math.sin(Math.PI * p) * arc;
+          // 尾: 少し前の位置から
+          const q = Math.max(0, p - (kind === K.missile ? 0.06 : 0.03));
+          const bx = lerp(sx, tx, q), bz = lerp(sz, tz, q), by = lerp(sy, ty, q) + Math.sin(Math.PI * q) * arc;
+          trail(bx, by, bz, x, y, z, c, kind === K.missile ? 0.6 : 0.9);
+          head(x, y, z, kind === K.missile ? [1.15, 1.0, 0.85] : c, 1, kind === K.missile ? 0.2 : 0.14);
+        } else {
+          const after = vt - t, q = 1 - after / fade;
+          if (q <= 0) continue;
+          if (hitv > 0) sprite('spark', tx, ty, tz, 0.5 * q + 0.15, COL.spark, q, hashf(k, 5) * 6);
+          else if (hitv < 0) sprite('flare', tx, ty + arc * 0.2, tz, 0.4 * q + 0.1, COL.flash, q * 0.8);
+        }
+      }
+    }
+    // 無人機（記録の区間の前後で同じ番号どうしを結んで動かす）
+    const f0 = R.F[fa.k], f1 = R.F[Math.min(fa.k + 1, R.F.length - 1)];
+    if (f0.drones) {
+      const DW = E.DRONE_W;
+      const m1 = f1._dmap || (f1._dmap = new Map());
+      if (f1.drones && !m1.size) for (let i = 0; i < f1.drones.length; i += DW) m1.set(f1.drones[i], i);
+      for (let i = 0; i < f0.drones.length; i += DW) {
+        const id = f0.drones[i], j = m1.get(id);
+        let x = f0.drones[i + 1], z = f0.drones[i + 2];
+        if (j != null && f1 !== f0) { x = lerp(x, f1.drones[j + 1], fa.a); z = lerp(z, f1.drones[j + 2], fa.a); }
+        const atk = f0.drones[i + 4] > 0, tg = f0.drones[i + 5];
+        if (atk && tg >= 0) { x += off[tg * 2]; z += off[tg * 2 + 1]; }
+        const y = (atk && tg >= 0 ? R.h[tg] * V.opts.height : 0) + (hashf(id, 9) - 0.5) * 0.8;
+        head(x, y, z, SCOL[f0.drones[i + 3]] || SCOL[0], atk ? 0.9 : 0.6, 0.13);
+      }
+    }
+    fx.proj.geometry.setDrawRange(0, np);
+    fx.proj.geometry.attributes.position.needsUpdate = true;
+    fx.proj.geometry.attributes.gcolor.needsUpdate = true;
+    fx.proj.geometry.attributes.gsize.needsUpdate = true;
+
     fx.beams.geometry.setDrawRange(0, nb * 2);
     fx.beams.geometry.attributes.position.needsUpdate = true;
     fx.beams.geometry.attributes.color.needsUpdate = true;

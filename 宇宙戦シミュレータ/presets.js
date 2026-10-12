@@ -8,6 +8,8 @@
   'use strict';
 
   const H = 3600, M = 60, M_ = 60;
+  // シェル系統（慣性弾）の副兵装の共通値。ウォードは歪曲への防御なので、実体弾は素通りする想定
+  const SHELL = { sOn: true, sKind: 'shell', sDamage: 40, sRange: 3, sInterval: 60, sAccuracy: 0.9, sFalloff: 0, sMounts: 1, sSpeed: 0.02, sBypass: 1 };
 
   const TYPES = {
     node: {
@@ -17,6 +19,8 @@
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
       ai: 'assault', priority: 'nearest', retreatAt: 0,
       linkOn: true, linkRadius: 5, linkCapacity: 12, linkLock: 45 * M, linkBonus: 0.3,
+      ...SHELL, sDamage: 80, sRange: 3.5, sMounts: 2,
+      pdOn: true, pdRange: 1.5, pdChance: 0.5, pdInterval: 6,
     },
     guard: {
       name: 'ガード級', abbr: 'G', shape: 'circle', size: 1, cost: 3, origin: 0,
@@ -24,6 +28,8 @@
       wDamage: 20, wRange: 3, wInterval: 30, wAccuracy: 0.9, wFalloff: 0.1,
       speed: 0.05, sensor: 30, jump: 'free', lockTime: 3 * H,
       ai: 'escort', priority: 'nearest', retreatAt: 0,
+      ...SHELL, sDamage: 40, sRange: 3,
+      pdOn: true, pdRange: 1, pdChance: 0.3, pdInterval: 10,
     },
     comms: {
       name: '通信艦', abbr: 'C', shape: 'square', size: 1.1, cost: 4, origin: 0,
@@ -55,6 +61,8 @@
       speed: 0, sensor: 120, jump: 'none', lockTime: 0,
       ai: 'static', priority: 'nearest', retreatAt: 0,
       fieldOn: true, fieldRadius: 180, fieldDeploy: 0, fieldDuration: 0, fieldMode: 'immediate',
+      ...SHELL, sDamage: 150, sRange: 6, sInterval: 40, sMounts: 4, sSpeed: 0.03,
+      pdOn: true, pdRange: 2, pdChance: 0.5, pdInterval: 5,
     },
     narm: {
       name: 'ナーム級', abbr: 'ナ', shape: 'triangle', size: 0.9, cost: 1, origin: 1,
@@ -77,6 +85,25 @@
       speed: 0.05, sensor: 200, jump: 'lane', lockTime: 30,
       ai: 'hold', priority: 'nearest', retreatAt: 0,
       layerOn: true, layerSpeed: 60 / (40 * M), layerMax: 300,
+    },
+    // 設定にない試作の艦種（副兵装の誘導弾・無人機を試すため）。数値は仮置き
+    missile: {
+      name: 'ミサイル艦（試作）', abbr: 'ミ', shape: 'triangle', size: 1.2, cost: 6, origin: 0,
+      hp: 500, shield: 400, shieldRegen: 0.5, evasion: 0,
+      wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
+      speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
+      ai: 'kite', priority: 'nearest', retreatAt: 0,
+      sOn: true, sKind: 'missile', sDamage: 120, sRange: 15, sInterval: 120, sAccuracy: 0.85, sFalloff: 0, sMounts: 4, sSpeed: 0.1, sBypass: 0.5, sLife: 600,
+      pdOn: true, pdRange: 1, pdChance: 0.3, pdInterval: 10,
+    },
+    carrier: {
+      name: '無人機母艦（試作）', abbr: '母', shape: 'square', size: 1.6, cost: 10, origin: 0,
+      hp: 1500, shield: 1000, shieldRegen: 1, evasion: 0,
+      wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
+      speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
+      ai: 'kite', priority: 'nearest', retreatAt: 0,
+      sOn: true, sKind: 'drone', sDamage: 10, sRange: 20, sInterval: 300, sAccuracy: 0.8, sFalloff: 0, sMounts: 4, sSpeed: 0.08, sBypass: 0, sLife: 15 * M,
+      pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
     },
     generic: {
       name: '汎用艦', abbr: '汎', shape: 'circle', size: 1, cost: 1, origin: 0,
@@ -206,7 +233,7 @@
   // o で兵力や時刻を変えられる（釣り合いを調べるため）
   function grandBattle(o) {
     o = Object.assign({
-      w1: 110, w2: 95, fl: 40,            // ザイレン: 第1波・予備・迂回部隊のナーム級
+      w1: 110, w2: 105, fl: 40,           // ザイレン: 第1波・予備・迂回部隊のナーム級
       w2At: 60,                           // ザイレン予備が後方のハブに着く時刻（分）
       n1: 5, g1: 60,                      // 人類主力のノード艦・ガード級
       n2: 3, g2: 32, rAt: 45,             // 人類増援のノード艦・ガード級・到着時刻（分）
@@ -315,12 +342,42 @@
     };
   }
 
+  // 副兵装の試し撃ち: シェル・誘導弾・無人機・迎撃を一度に見るための小さな戦い（設定にない試作艦を含む）
+  function armsDemo() {
+    const types = pick(ALL);
+    types.base.fieldRadius = 15;
+    // 迎撃を見るため、ガルメス級にも試しに誘導弾を積む（設定にはない）
+    Object.assign(types.garmes, { sOn: true, sKind: 'missile', sDamage: 100, sRange: 12, sInterval: 90, sAccuracy: 0.8, sFalloff: 0, sMounts: 3, sSpeed: 0.1, sBypass: 0.5 });
+    return {
+      name: '副兵装の試し撃ち',
+      note: '副兵装を一度に見るための小さな戦い。人類は拠点（シェル）・ガード級とノード艦（シェルと迎撃）に、試作のミサイル艦（誘導弾）と無人機母艦（無人機）を加えた。ザイレンはナーム級75とガルメス級4で、ガルメス級には試しに誘導弾を積んだ。ミサイル艦と母艦は射程を保って撃ち、ナーム級が寄ってくるとガード級の主砲とシェルの間合いになる。',
+      settings: { timeLimit: 3 * H },
+      sides: [
+        { name: '人類統合機構', color: 'blue', reaction: 2 * M, sharing: 'always', retreatBelow: 0.2 },
+        { name: 'ザイレン', color: 'orange', reaction: 2 * M, sharing: 'always', retreatBelow: 0.2 },
+      ],
+      types,
+      units: [].concat(
+        [{ type: 'base', side: 0, x: 0, y: 0 }],
+        group('node', 0, 1, 14, 0, 1, 'cluster'),
+        group('guard', 0, 16, 15, 0, 0.6, 'cluster'),
+        group('missile', 0, 4, 10, -3, 1.2, 'line'),
+        group('carrier', 0, 2, 8, 3, 1.5, 'line'),
+        group('narm', 1, 75, 60, 0, 0.6, 'cluster'),
+        group('garmes', 1, 4, 64, 0, 1.5, 'line'),
+      ),
+      lanes: [],
+      marks: [{ x: 0, y: 3, text: '人類拠点' }, { x: 60, y: 5, text: 'ザイレン' }],
+    };
+  }
+
   const SCENARIOS = [
     { id: 'basic', label: '正面衝突', make: basic },
     { id: 'sA', label: 'S星系外縁 A（後続が後方）', make: () => sSystem('A') },
     { id: 'sB', label: 'S星系外縁 B（後続をH2に温存）', make: () => sSystem('B') },
     { id: 'grand', label: '大規模会戦: S星系決戦', make: grandBattle },
     { id: 'lan', label: '数の差の確認（同性能 20 対 30）', make: lanchester },
+    { id: 'arms', label: '副兵装の試し撃ち', make: armsDemo },
     { id: 'empty', label: '空のマップ', make: empty },
   ];
 

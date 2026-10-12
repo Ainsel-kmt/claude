@@ -164,8 +164,8 @@ for (const p of P.SCENARIOS) {
 
 // ---- 救援: 手が空いた護衛は、攻められている味方の拠点へ向かう（通信艦が随伴していても待ち合わない）
 {
-  const st = clone(T.base); st.wDamage = 0; st.fieldOn = false; st.hp = 1e7;
-  const g = clone(T.guard); g.lockTime = 0;
+  const st = clone(T.base); st.wDamage = 0; st.sOn = false; st.fieldOn = false; st.hp = 1e7;
+  const g = clone(T.guard); g.lockTime = 0; g.sOn = false;
   const c = clone(T.comms); c.lockTime = 0; c.commsResync = 0;
   const foe = clone(T.generic); foe.ai = 'static'; foe.speed = 0;
   const units = [
@@ -188,8 +188,8 @@ for (const p of P.SCENARIOS) {
 
 // ---- 持ち場防衛の艦は、守っていた拠点を失うと護衛に切り替える
 {
-  const st = clone(T.base); st.wDamage = 0; st.fieldOn = false; st.hp = 50; st.shield = 0; st.shieldRegen = 0;
-  const g = clone(T.guard); g.wDamage = 0; g.hp = 1e6;
+  const st = clone(T.base); st.wDamage = 0; st.sOn = false; st.fieldOn = false; st.hp = 50; st.shield = 0; st.shieldRegen = 0;
+  const g = clone(T.guard); g.wDamage = 0; g.sOn = false; g.hp = 1e6;
   const foe = clone(T.generic); foe.ai = 'static'; foe.speed = 0; foe.wAccuracy = 1; foe.wRange = 4; foe.priority = 'key';
   const S = runFor(scn({ st, g, foe }, [
     { type: 'st', side: 0, x: 0, y: 0 },
@@ -202,7 +202,7 @@ for (const p of P.SCENARIOS) {
 
 // ---- 砲門が複数あれば、射程内の別々の敵を同時に撃つ
 {
-  const fort = clone(T.base); fort.fieldOn = false; fort.wAccuracy = 1; fort.wFalloff = 0; fort.wRange = 6; fort.wInterval = 20; fort.wDamage = 10;
+  const fort = clone(T.base); fort.fieldOn = false; fort.sOn = false; fort.wAccuracy = 1; fort.wFalloff = 0; fort.wRange = 6; fort.wInterval = 20; fort.wDamage = 10;
   const foe = clone(T.generic); foe.wDamage = 0; foe.ai = 'static'; foe.speed = 0; foe.hp = 1000;
   const mk = (mounts) => {
     const f = Object.assign(clone(fort), { wMounts: mounts });
@@ -213,6 +213,47 @@ for (const p of P.SCENARIOS) {
   check('砲門4: 4隻を同時に撃つ', hit(mk(4)) === 4, hit(mk(4)));
   const S6 = mk(6);
   check('砲門が敵より多ければ、余りは標的に重ねる', S6.units.filter((u) => u.side === 1).reduce((a, u) => a + (1000 - u.hp), 0) >= 60, S6.units.map((u) => u.hp));
+}
+
+// ---- 副兵装
+{
+  // 撃つ側: 主砲なし、副兵装だけ。標的: 動かない的と、動ける的
+  const shooter = (kind, extra) => Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'static', speed: 0, sensor: 100,
+    sOn: true, sKind: kind, sDamage: 10, sRange: 5, sInterval: 20, sAccuracy: 1, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 0, sLife: 600,
+  }, extra || {});
+  const still = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, shield: 0 });
+  const mover = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0.05, hp: 1e6, shield: 0 });
+  const dealt = (S, i) => 1e6 - S.units[i].hp;
+  const one = (types, sec) => runFor(scn(types, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 4, y: 0 }]), sec || 600);
+
+  const L = one({ a: shooter('line'), b: still });
+  check('副兵装（ライン型）は一瞬で当たる', dealt(L, 1) >= 250, dealt(L, 1));
+
+  const sh1 = one({ a: shooter('shell'), b: still });
+  const sh2 = one({ a: shooter('shell'), b: mover });
+  check('シェルは動かない的にはよく当たる', dealt(sh1, 1) >= 250, dealt(sh1, 1));
+  check('シェルは届くまでが長いと、動ける艦にはかわされる', dealt(sh2, 1) < dealt(sh1, 1) * 0.3, [dealt(sh1, 1), dealt(sh2, 1)]);
+
+  const ward = Object.assign(clone(still), { shield: 1e5, shieldRegen: 0 });
+  const by = one({ a: shooter('shell', { sBypass: 1 }), b: ward });
+  check('素通りの割合が100%なら、ウォードは減らず船体が減る', by.units[1].sh === 1e5 && by.units[1].hp < 1e6, { sh: by.units[1].sh, hp: by.units[1].hp });
+
+  const pd = Object.assign(clone(still), { pdOn: true, pdRange: 1, pdChance: 1, pdInterval: 1 });
+  const m1 = one({ a: shooter('missile'), b: still });
+  const m2 = one({ a: shooter('missile'), b: pd });
+  check('誘導弾は迎撃がなければ当たる', dealt(m1, 1) >= 250, dealt(m1, 1));
+  check('迎撃率100%なら誘導弾はすべて落とされる', dealt(m2, 1) === 0 && m2.arms[0].missilesDown > 0, { dealt: dealt(m2, 1), down: m2.arms[0].missilesDown });
+
+  const d1 = one({ a: shooter('drone', { sInterval: 600, sMounts: 2, sLife: 300 }), b: still }, 1500);
+  check('無人機は標的のそばで撃ち続ける', d1.arms[0].drones >= 4 && d1.arms[0].droneHits >= 40, d1.arms[0]);
+  check('稼働時間が尽きた無人機は消える', d1.drones.every((r) => r.until > d1.t) && d1.drones.length < d1.arms[0].drones, { left: d1.drones.length, launched: d1.arms[0].drones });
+  const d2 = one({ a: shooter('drone', { sInterval: 600, sMounts: 2, sLife: 300 }), b: pd }, 300);
+  check('無人機は迎撃で落とされる', d2.arms[0].dronesDown === 2, d2.arms[0]);
+
+  // 副兵装がない艦種だけのシナリオは、乱数の引き方も含めて前と同じ（記録の有無でも変わらない）
+  const s0 = scn({ a: still, b: mover }, [{ type: 'a', side: 0, x: 0, y: 0 }]);
+  check('副兵装のない艦は副兵装を撃たない', E.runOnce(s0, 1).sides[0].arms.fired === 0);
 }
 
 // ---- 時間切れの判定

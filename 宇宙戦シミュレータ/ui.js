@@ -502,21 +502,62 @@
     }
   }
 
+  // 射線: 主砲・ライン型・無人機は実線、シェルは点線、誘導弾は破線。迎撃は着いた位置の小さな ×
   function drawShots(sc) {
     const s = sc.shots;
     if (!s) return;
+    const W = E.SHOT_W, K = E.SHOT_KIND;
+    const styles = [
+      { kinds: [K.main, K.line, K.drone], dash: [] },
+      { kinds: [K.shell], dash: [1.5, 3.5] },
+      { kinds: [K.missile], dash: [6, 3] },
+    ];
     for (let side = 0; side < 2; side++) {
       const col = sideColor(side);
-      for (let hit = 0; hit < 2; hit++) {
+      for (const st of styles) {
+        for (let hit = 0; hit < 2; hit++) {
+          ctx.beginPath();
+          let any = false;
+          for (let i = 0; i < s.length; i += W) {
+            if (s[i + 5] !== side || (s[i + 4] > 0 ? 1 : 0) !== hit || !st.kinds.includes(s[i + 9])) continue;
+            ctx.moveTo(sx(s[i]), sy(s[i + 1])); ctx.lineTo(sx(s[i + 2]), sy(s[i + 3])); any = true;
+          }
+          if (!any) continue;
+          ctx.setLineDash(st.dash);
+          ctx.strokeStyle = rgba(col, hit ? 0.8 : 0.22); ctx.lineWidth = hit ? 1.3 : 1;
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]);
+      // 迎撃（落とせたものだけ）
+      ctx.beginPath();
+      let any = false;
+      for (let i = 0; i < s.length; i += W) {
+        if (s[i + 5] !== side || s[i + 9] !== K.intercept || !(s[i + 4] > 0)) continue;
+        const x = sx(s[i + 2]), y = sy(s[i + 3]);
+        ctx.moveTo(x - 3, y - 3); ctx.lineTo(x + 3, y + 3); ctx.moveTo(x - 3, y + 3); ctx.lineTo(x + 3, y - 3); any = true;
+      }
+      if (any) { ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 1.2; ctx.stroke(); }
+    }
+  }
+
+  // 飛んでいる無人機: 陣営の色の小さな点（攻撃中は明るく）
+  function drawDrones(sc) {
+    const r = sc.frame && sc.frame.drones;
+    if (!r) return;
+    const W = E.DRONE_W;
+    for (let side = 0; side < 2; side++) {
+      for (let atk = 0; atk < 2; atk++) {
         ctx.beginPath();
         let any = false;
-        for (let i = 0; i < s.length; i += E.SHOT_W) {
-          if (s[i + 5] !== side || s[i + 4] !== hit) continue;
-          ctx.moveTo(sx(s[i]), sy(s[i + 1])); ctx.lineTo(sx(s[i + 2]), sy(s[i + 3])); any = true;
+        for (let i = 0; i < r.length; i += W) {
+          if (r[i + 3] !== side || r[i + 4] !== atk) continue;
+          const x = sx(r[i + 1]), y = sy(r[i + 2]);
+          ctx.moveTo(x + 1.6, y); ctx.arc(x, y, 1.6, 0, Math.PI * 2); any = true;
         }
         if (!any) continue;
-        ctx.strokeStyle = rgba(col, hit ? 0.8 : 0.22); ctx.lineWidth = hit ? 1.3 : 1;
-        ctx.stroke();
+        ctx.fillStyle = rgba(sideColor(side), atk ? 0.95 : 0.55);
+        ctx.fill();
       }
     }
   }
@@ -653,6 +694,7 @@
     if (app.opts.goals) drawGoals(sc);
     if (app.opts.links && !sc.edit) drawLinks(sc);
     if (app.opts.shots && !sc.edit) drawShots(sc);
+    if (!sc.edit) drawDrones(sc);
     drawUnits(sc);
     drawOverlays();
   }
@@ -1477,6 +1519,7 @@
       html += '<fieldset><legend>' + esc(g.g) + '</legend><div class="form">';
       for (const f of g.fs) {
         if (f.on && !d[f.on]) continue;
+        if (f.kinds && !f.kinds.includes(d.sKind)) continue;
         html += fieldControl('tf-', f, d[f.k]);
       }
       if (g.g === '基本') {
@@ -1485,6 +1528,21 @@
       if (g.g === '兵装' && d.wDamage > 0) {
         const dps = E.dpsOf(d);
         html += '<p class="help">目安: 1分あたり約 ' + num(dps * 60, 1) + ' の損害（回避0の相手、近距離）。射程は約' + fmtKm(d.wRange) + '。</p>';
+      }
+      if (g.g === '副兵装' && E.hasSecondary(d)) {
+        const n = Math.max(1, Math.floor(d.sMounts || 1));
+        let t = '目安: ' + num(d.sInterval / 60, 1) + '分ごとに' + n + (d.sKind === 'drone' ? '機を発進' : '発') + '。';
+        if (d.sKind !== 'line') {
+          const fl = d.sRange / Math.max(1e-3, d.sSpeed);
+          t += '射程いっぱいまで届くのに' + (fl < 120 ? num(fl, 0) + '秒' : num(fl / 60, 1) + '分') + '。';
+          if (d.sKind === 'shell') {
+            const dg = (scn.settings && scn.settings.shellDodge != null) ? scn.settings.shellDodge : E.DEFAULT_SETTINGS.shellDodge;
+            const f1 = dg > 0 ? 1 / (1 + fl / dg) : 1, f2 = dg > 0 ? 1 / (1 + (fl / 2) / dg) : 1;
+            t += '動ける艦への命中は、射程いっぱいで' + num(f1 * 100, 0) + '%、半分の距離で' + num(f2 * 100, 0) + '%に下がる（動かない艦には下がらない）。';
+          }
+        }
+        if (d.sBypass > 0) t += '損害の' + num(d.sBypass * 100, 0) + '%はウォードを素通りする。';
+        html += '<p class="help">' + esc(t) + '</p>';
       }
       if (g.g === '機動' && d.speed > 0) {
         html += '<p class="help">目安: 10光秒（約' + fmtKm(10) + '）進むのに ' + num(10 / d.speed / 60, 1) + '分。</p>';
@@ -1722,6 +1780,13 @@
     rows.push([sym('<circle cx="4" cy="8" r="3" style="fill:none;stroke:var(--ink-2)"/><line x1="7" y1="8" x2="13" y2="8" style="stroke:var(--ink-2);stroke-dasharray:2 2"/><circle cx="13" cy="8" r="2" style="fill:none;stroke:var(--ink-2)"/>'), 'ジャンプ中（点線の先へ）']);
     rows.push([sym('<path d="M4 4 L12 12 M12 4 L4 12" style="stroke:var(--ink-3);stroke-width:1.5"/>'), '撃沈']);
     rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:1.3"/>'), '射線（薄いのは外れ）']);
+    const typesNow = [...new Set(scn.units.map((u) => u.type))].map(typeOf);
+    if (typesNow.some((d) => d.sOn)) {
+      rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:1.3;stroke-dasharray:1.5 3"/>'), 'シェル（点線）']);
+      if (typesNow.some((d) => d.sOn && d.sKind === 'missile')) rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:1.3;stroke-dasharray:5 2.5"/>'), '誘導弾（破線）']);
+      if (typesNow.some((d) => d.sOn && d.sKind === 'drone')) rows.push([sym('<circle cx="8" cy="8" r="2" style="fill:var(--ink-2)"/>'), '無人機']);
+    }
+    if (typesNow.some((d) => d.pdOn)) rows.push([sym('<path d="M5 5 L11 11 M5 11 L11 5" style="stroke:var(--ink-2);stroke-width:1.2"/>'), '迎撃で落とした弾・無人機（小さな×）']);
     $('legend').innerHTML = rows.map((r) => '<span>' + r[0] + '</span><span>' + r[1] + '</span>').join('');
   }
 
