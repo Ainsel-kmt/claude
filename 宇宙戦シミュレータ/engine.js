@@ -959,7 +959,7 @@
     const dd = dist(u, tg);
     const p = d.wAccuracy * (1 - d.wFalloff * Math.min(1, dd / Math.max(d.wRange, 1e-6))) * (1 - tg.def.evasion);
     const hit = S.rng() < p;
-    if (S.record) S.shots.push(u.x, u.y, tg.x, tg.y, hit ? 1 : 0, u.side);
+    if (S.record) S.shots.push(u.x, u.y, tg.x, tg.y, hit ? 1 : 0, u.side, S.t, u.id, tg.id);
     if (!hit) return;
     let dmg = d.wDamage * (u.linked ? 1 + u.linkBonus : 1);
     u.dealt += dmg;
@@ -1033,6 +1033,10 @@
 
   const F = { alive: 1, present: 2, escaped: 4, jump: 8, lock: 16, linked: 32, deploy: 64, field: 128, retreat: 256, lay: 512, wait: 1024, laneJump: 2048 };
 
+  // 射撃の記録: 1発あたり SHOT_W 個の数値
+  //  0-1 撃った艦の位置, 2-3 標的の位置, 4 命中なら1, 5 撃った側の陣営, 6 時刻, 7 撃った艦の番号, 8 標的の番号
+  const SHOT_W = 9;
+
   // 記録フレーム: 1隻あたり FRAME_W 個の数値
   //  0 x, 1 y（ジャンプ中は出発点）, 2 船体耐久の割合, 3 ウォードの割合, 4 フラグ,
   //  5 ロックタイムの実残り秒（リンクで縮んだ値）, 6-7 ジャンプ先または延伸の目標,
@@ -1075,11 +1079,12 @@
       S.laneSnap = S.lanes.map((l) => ({ side: l.side, grow: !!l.grow, pts: l.pts.map((p) => [p.x, p.y]) }));
       S.laneSnapVer = S.laneVer;
     }
+    S.shotsFlushed = true;
     S.frames.push({
       t: S.t, u: a, tg,
       fields: S.fields.map((f) => ({ x: f.x, y: f.y, r: f.r, side: f.side })),
       lanes: S.laneSnap,
-      shots: S.shots.length ? Float32Array.from(S.shots) : null,
+      shots: S.shots.length ? Float32Array.from(S.shots) : null,   // 前の記録からの射撃すべて（SHOT_W 個ずつ）
       sharing: S.sharing.slice(),
       retreat: S.sideRetreat.slice(),
       hist: S.hist.t.length - 1,
@@ -1149,7 +1154,8 @@
     if (S.done) return;
     S.t += S.set.dt;
     S.n++;
-    S.shots = [];
+    // 射撃の記録は、フレームに書き出すまで刻みをまたいでためる（記録が数刻みおきでも取りこぼさない）
+    if (S.shotsFlushed || !S.record) { S.shots = []; S.shotsFlushed = false; }
     spawn(S);
     finishJumps(S);
     updateFields(S);
@@ -1187,7 +1193,7 @@
   }
 
   const api = {
-    AI, PRIORITY, MOVE, JUMP, SHAPES, SHARING, FIELD_MODE, FLAGS: F, FRAME_W,
+    AI, PRIORITY, MOVE, JUMP, SHAPES, SHARING, FIELD_MODE, FLAGS: F, FRAME_W, SHOT_W,
     DEFAULT_TYPE, DEFAULT_SETTINGS, DEFAULT_SIDES, TYPE_FIELDS, SETTING_FIELDS, SIDE_FIELDS,
     normalizeType, normalizeScenario, createSim, step, runUntil, runToEnd, runOnce,
     fmtTime, fmtMin, isKey, dpsOf, clone,

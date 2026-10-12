@@ -510,7 +510,7 @@
       for (let hit = 0; hit < 2; hit++) {
         ctx.beginPath();
         let any = false;
-        for (let i = 0; i < s.length; i += 6) {
+        for (let i = 0; i < s.length; i += E.SHOT_W) {
           if (s[i + 5] !== side || s[i + 4] !== hit) continue;
           ctx.moveTo(sx(s[i]), sy(s[i + 1])); ctx.lineTo(sx(s[i + 2]), sy(s[i + 3])); any = true;
         }
@@ -678,7 +678,7 @@
     for (let k = Math.max(0, app.fi - 12); k <= app.fi; k++) {
       const sh = S.frames[k].shots;
       if (!sh) continue;
-      for (let i = 0; i < sh.length; i += 6) {
+      for (let i = 0; i < sh.length; i += E.SHOT_W) {
         for (const [x, y] of [[sh[i], sh[i + 1]], [sh[i + 2], sh[i + 3]]]) {
           if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
         }
@@ -1821,7 +1821,9 @@
       const blob = new Blob([$('ioText').value], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (app.scn.name || 'scenario').replace(/[\\/:*?"<>|]/g, '_') + '.json';
+      // 日本語のファイル名はブラウザに捨てられることがあるので、英数字と日時にする
+      const d = new Date(), z = (n) => String(n).padStart(2, '0');
+      a.download = 'uchusen_scenario_' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()) + '.json';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       $('ioStatus').textContent = 'ファイルとして保存しました。保存されない環境では「コピー」を使ってください。';
@@ -1880,6 +1882,14 @@
   $('playBtn').onclick = () => (app.playing ? pause() : play());
   $('resetBtn').onclick = () => { resetSim(); refreshAll(); toast('T=0 の編集に戻りました'); };
   $('endBtn').onclick = toEnd;
+  // 3Dビューアへ: シナリオ・シード・いまの時刻をブラウザの保存領域で渡し、別のタブで開く
+  $('view3dBtn').onclick = () => {
+    if (!app.scn.units.length) { toast('先に艦を配置してください'); return; }
+    const payload = { v: 1, scenario: app.scn, seed: app.scn.settings.seed, t: app.sim ? app.sim.frames[app.fi].t : 0, at: Date.now() };
+    try { localStorage.setItem('uchusen-3d-handoff', JSON.stringify(payload)); } catch (e) { toast('ブラウザに保存できないため、3Dビューアへ渡せません。ビューアの「シナリオ」から JSON を開いてください'); return; }
+    const w = window.open('viewer3d.html', 'uchusen3d');
+    if (!w) location.href = 'viewer3d.html';
+  };
   $('seek').addEventListener('input', (e) => { app.playing = false; seekTo(+e.target.value); });
 
   // キーボード

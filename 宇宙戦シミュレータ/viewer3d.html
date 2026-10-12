@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>宇宙戦 3Dビューア</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+/* 映画の上映画面として、暗い一枚の見た目に決めている（明るいテーマは持たない）。
+   画面いっぱいの3D表示の上に、シネマの帯・字幕・最小限の表示・操作バー・設定の引き出しを重ねる */
+:root {
+  --void: #03060a;
+  --ink: #e9eef4;
+  --ink-2: #a7b2bf;
+  --ink-3: #6c7887;
+  --glass: rgba(10, 15, 22, 0.72);
+  --line: rgba(160, 180, 200, 0.18);
+  --human: #5aa2ff;
+  --zairen: #ff8a3d;
+  --field: #2fd19a;
+  --font-ui: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --font-mark: "Dela Gothic One", "BIZ UDPGothic", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--void); color: var(--ink); font: 14px/1.5 var(--font-ui); overflow: hidden; }
+button, select, input { font: inherit; color: inherit; }
+button { background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+button:hover { background: rgba(255, 255, 255, 0.12); }
+button[aria-pressed="true"] { background: var(--ink); color: var(--void); border-color: var(--ink); }
+button:disabled { opacity: 0.4; cursor: default; }
+select, input[type="number"], input[type="text"] { background: rgba(0, 0, 0, 0.45); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; }
+:focus-visible { outline: 2px solid var(--human); outline-offset: 1px; }
+
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.bar { position: fixed; left: 0; right: 0; height: 9vh; background: #000; pointer-events: none; transition: height .6s ease; z-index: 2; }
+.bar.top { top: 0; } .bar.bottom { bottom: 0; }
+body.no-letterbox .bar { height: 0; }
+
+.hud { position: fixed; top: calc(9vh + 14px); left: 18px; z-index: 3; pointer-events: none; transition: opacity .4s; }
+body.no-letterbox .hud { top: 14px; }
+.hud .title { font-family: var(--font-mark); font-size: 15px; letter-spacing: .06em; opacity: .9; }
+.hud .clock { font-family: var(--font-num); font-size: 22px; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.strength { display: grid; grid-template-columns: auto 140px auto; gap: 4px 8px; align-items: center; margin-top: 6px; font-size: 12px; }
+.strength .meter { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
+.strength .meter > div { height: 100%; width: 0; }
+.strength .num { font-family: var(--font-num); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.top-right { position: fixed; top: calc(9vh + 12px); right: 16px; z-index: 4; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 70vw; }
+body.no-letterbox .top-right { top: 12px; }
+.top-right a { color: var(--ink-2); font-size: 13px; text-decoration: none; padding: 5px 4px; }
+.top-right a:hover { color: var(--ink); }
+
+.caption { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(9vh + 76px); z-index: 3; text-align: center; pointer-events: none; width: min(900px, 90vw); }
+body.no-letterbox .caption { bottom: 86px; }
+.caption div { display: inline-block; margin: 3px 0; padding: 4px 14px; font-size: 17px; letter-spacing: .04em; text-shadow: 0 1px 6px #000, 0 0 2px #000; transition: opacity .5s; }
+.caption .t { font-family: var(--font-num); font-size: 12px; color: var(--ink-2); margin-right: 10px; }
+
+.controls { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(9vh + 14px); z-index: 4; width: min(1100px, calc(100vw - 32px)); background: var(--glass); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; backdrop-filter: blur(6px); transition: opacity .4s; }
+body.no-letterbox .controls { bottom: 14px; }
+.controls #seekWrap { position: relative; flex: 1 1 260px; min-width: 160px; height: 22px; display: flex; align-items: center; }
+#seek { width: 100%; accent-color: var(--ink); position: relative; z-index: 1; }
+#ticks { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; }
+#ticks i { position: absolute; top: 2px; width: 2px; height: 6px; border-radius: 1px; opacity: .8; }
+#clock2 { font-family: var(--font-num); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; color: var(--ink-2); }
+.seg { display: flex; }
+.seg button { border-radius: 0; margin-left: -1px; padding: 5px 9px; }
+.seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+#playBtn { min-width: 4.5em; }
+.rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff4d4d; margin-right: 6px; vertical-align: 1px; }
+body.recording #recBtn { border-color: #ff4d4d; }
+
+body.idle .controls, body.idle .top-right, body.idle .hud.hideable { opacity: 0; pointer-events: none; }
+body.idle { cursor: none; }
+
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 100vw); background: rgba(8, 12, 18, 0.94); border-left: 1px solid var(--line); z-index: 6; transform: translateX(100%); transition: transform .3s ease; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.drawer header h2 { font-size: 15px; margin: 0; }
+.drawer .body { padding: 12px 16px 24px; overflow: auto; flex: 1; }
+.drawer h3 { font-size: 12px; letter-spacing: .08em; color: var(--ink-2); margin: 16px 0 6px; }
+.drawer h3:first-child { margin-top: 0; }
+.drawer p, .drawer li { color: var(--ink-2); font-size: 12.5px; margin: 4px 0; }
+.drawer .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.drawer label.chk { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 13px; }
+.drawer .range { display: grid; grid-template-columns: 7em 1fr 3em; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }
+.drawer .range output { font-family: var(--font-num); color: var(--ink-2); text-align: right; }
+.mtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mtable td { padding: 5px 2px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.mtable td.src { color: var(--ink-2); max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtable button { padding: 2px 7px; font-size: 12px; }
+.drop { border: 1px dashed var(--line); border-radius: 8px; padding: 10px; text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 8px; }
+.drop.over { border-color: var(--ink); color: var(--ink); }
+code { font-family: var(--font-num); font-size: 12px; color: var(--ink); }
+
+.card { position: fixed; z-index: 5; left: 18px; bottom: calc(9vh + 76px); width: 260px; background: var(--glass); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; backdrop-filter: blur(6px); }
+body.no-letterbox .card { bottom: 86px; }
+.card b { font-size: 14px; }
+.card .k { color: var(--ink-3); }
+.card .meter { height: 4px; background: rgba(255,255,255,.12); border-radius: 2px; overflow: hidden; margin: 3px 0 6px; }
+.card .meter > div { height: 100%; }
+
+.labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+.labels span { position: absolute; transform: translate(-50%, -100%); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; text-shadow: 0 0 4px #000, 0 0 2px #000; letter-spacing: .04em; }
+.labels span.unit { font-size: 10.5px; color: var(--ink); opacity: .85; }
+
+.titlecard { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; transition: opacity 1.2s ease; padding: 0 24px; }
+.titlecard .eyebrow { font-size: 12px; letter-spacing: .5em; color: var(--ink-2); margin-bottom: 14px; }
+.titlecard h1 { font-family: var(--font-mark); font-weight: 400; font-size: clamp(28px, 5vw, 56px); letter-spacing: .08em; margin: 0; text-wrap: balance; text-shadow: 0 0 30px rgba(90, 162, 255, .35); }
+.titlecard p { max-width: 62ch; color: var(--ink-2); font-size: 13.5px; margin-top: 16px; text-wrap: pretty; }
+.titlecard.gone { opacity: 0; }
+
+.loading { position: fixed; inset: 0; z-index: 8; background: var(--void); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .5s; }
+.loading.gone { opacity: 0; pointer-events: none; }
+.loading .msg { color: var(--ink-2); font-size: 14px; }
+.loading .prog { width: min(320px, 70vw); height: 3px; background: rgba(255,255,255,.12); border-radius: 2px; overflow: hidden; }
+.loading .prog > div { height: 100%; width: 0; background: var(--ink); transition: width .2s; }
+.loading .err { color: #ff8f8f; max-width: 60ch; text-align: center; font-size: 13.5px; padding: 0 20px; }
+
+.toast { position: fixed; top: calc(9vh + 60px); left: 50%; transform: translateX(-50%); z-index: 7; background: var(--glass); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; font-size: 13px; transition: opacity .4s; pointer-events: none; }
+
+@media (max-width: 640px) {
+  .bar { height: 5vh; }
+  .hud { top: calc(5vh + 10px); left: 12px; }
+  .strength { grid-template-columns: auto 90px auto; }
+  .top-right { top: calc(5vh + 8px); right: 10px; }
+  .controls { bottom: calc(5vh + 8px); }
+  .caption { bottom: calc(5vh + 130px); }
+  .caption div { font-size: 14px; }
+  .card { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="labels" id="labels"></div>
+<div class="bar top"></div>
+<div class="bar bottom"></div>
+
+<div class="hud" id="hud">
+  <div class="title" id="hudTitle"></div>
+  <div class="clock" id="hudClock">T+0:00:00</div>
+  <div class="strength" id="hudStrength"></div>
+</div>
+
+<div class="top-right" id="topRight">
+  <button id="scnBtn">シナリオ</button>
+  <button id="modelBtn">モデル</button>
+  <button id="viewBtn">表示</button>
+  <button id="recBtn" title="いまの画面を動画に録る（R）">録画</button>
+  <button id="fsBtn" title="全画面（F）">全画面</button>
+  <a href="index.html" id="backLink">2Dの画面へ</a>
+</div>
+
+<div class="caption" id="caption"></div>
+<div class="card" id="card" hidden></div>
+
+<div class="titlecard" id="titlecard">
+  <div class="eyebrow" id="tcEyebrow">宇宙戦シミュレータ</div>
+  <h1 id="tcTitle"></h1>
+  <p id="tcNote"></p>
+</div>
+
+<div class="controls" id="controls">
+  <button id="playBtn" title="再生・停止（Space）">再生</button>
+  <div id="seekWrap"><input id="seek" type="range" min="0" max="100" step="1" value="0" aria-label="時刻"><div id="ticks"></div></div>
+  <output id="clock2">T+0:00:00</output>
+  <select id="speedSel" aria-label="再生の速さ">
+    <option value="5">1秒で5秒</option>
+    <option value="15">1秒で15秒</option>
+    <option value="60" selected>1秒で1分</option>
+    <option value="300">1秒で5分</option>
+    <option value="900">1秒で15分</option>
+    <option value="3600">1秒で1時間</option>
+  </select>
+  <div class="seg" id="camSeg" role="group" aria-label="カメラ">
+    <button data-cam="director" title="見どころを自動で切り替える（1）">監督</button>
+    <button data-cam="combat" title="いちばん激しい交戦を追う（2）">交戦</button>
+    <button data-cam="follow" title="選んだ艦を追う（3）。艦をクリックで選ぶ">追尾</button>
+    <button data-cam="overview" title="戦場全体（4）">俯瞰</button>
+    <button data-cam="free" title="マウスで自由に動かす（5）">自由</button>
+  </div>
+</div>
+
+<aside class="drawer" id="drawerScn" aria-label="シナリオ">
+  <header><h2>シナリオ</h2><button data-close>閉じる</button></header>
+  <div class="body">
+    <h3>いま表示しているもの</h3>
+    <p id="srcInfo"></p>
+    <h3>2Dの画面から受け取る</h3>
+    <p>2Dの画面で「3Dで見る」を押すと、そのときの配置・艦種・設定とシードがここへ渡されます。</p>
+    <div class="row"><button id="takeHandoff">受け取り直す</button></div>
+    <h3>プリセット</h3>
+    <div class="row"><select id="presetSel"></select></div>
+    <h3>乱数シード</h3>
+    <div class="row"><input id="seedIn" type="number" min="1" step="1" style="width:7em"><button id="reseed">このシードで計算し直す</button></div>
+    <p>同じシナリオ・同じシードなら、2Dの画面と同じ戦いになります。</p>
+    <h3>シナリオの JSON を開く</h3>
+    <div class="row"><button id="openJson">ファイルを開く</button><input id="jsonFile" type="file" accept=".json,application/json" hidden></div>
+    <p>2Dの画面の「保存・読込」や <code>tools/battle.js --save</code> で書き出したものが読めます。</p>
+  </div>
+</aside>
+
+<aside class="drawer" id="drawerModel" aria-label="モデル">
+  <header><h2>モデル</h2><button data-close>閉じる</button></header>
+  <div class="body">
+    <p>艦種ごとに GLB（glTF）のモデルに差し替えられます。前が +Z、上が +Y の向きで作ってください。大きさは自動でそろえます。マテリアル名に <code>team</code> を含む部分は陣営の色で光ります。</p>
+    <table class="mtable" id="modelTable"></table>
+    <div class="drop" id="drop">ここに .glb を落とすと、上で選んだ艦種に使います</div>
+    <h3>差し替えを残すには</h3>
+    <p><code>models</code> フォルダに GLB を置いて <code>models/models.json</code> に書き、<code>node tools/pack-models.js</code> を実行してください。次に開いたときから使われます。くわしくは <code>models/README.md</code>。</p>
+    <p>「型紙」で既定のモデルを GLB に書き出せます。Blender などで開くと、向きと大きさの目安になります。</p>
+  </div>
+</aside>
+
+<aside class="drawer" id="drawerView" aria-label="表示">
+  <header><h2>表示</h2><button data-close>閉じる</button></header>
+  <div class="body">
+    <h3>画面</h3>
+    <label class="chk"><input type="checkbox" id="optLetterbox" checked>シネマの帯</label>
+    <label class="chk"><input type="checkbox" id="optCaptions" checked>字幕（主な出来事）</label>
+    <label class="chk"><input type="checkbox" id="optHud" checked>時刻と戦力</label>
+    <label class="chk"><input type="checkbox" id="optAutohide" checked>操作が止まったら操作バーを隠す</label>
+    <h3>戦場</h3>
+    <label class="chk"><input type="checkbox" id="optBeams" checked>射線</label>
+    <label class="chk"><input type="checkbox" id="optFields" checked>妨害場</label>
+    <label class="chk"><input type="checkbox" id="optLanes" checked>レーン</label>
+    <label class="chk"><input type="checkbox" id="optPlaces" checked>地名</label>
+    <label class="chk"><input type="checkbox" id="optUnitLabels">要艦の名前</label>
+    <label class="chk"><input type="checkbox" id="optLocks">ロックタイムの輪</label>
+    <h3>映像</h3>
+    <label class="chk"><input type="checkbox" id="optNebula" checked>星雲</label>
+    <label class="chk"><input type="checkbox" id="optFilm" checked>フィルムの質感（粒子・周辺減光）</label>
+    <div class="range"><span>光のにじみ</span><input type="range" id="optBloom" min="0" max="2" step="0.05" value="1"><output id="optBloomOut">1.00</output></div>
+    <div class="range"><span>高さのずれ</span><input type="range" id="optHeight" min="0" max="3" step="0.1" value="1"><output id="optHeightOut">1.0</output></div>
+    <div class="range"><span>艦の大きさ</span><input type="range" id="optShipScale" min="0.5" max="3" step="0.1" value="1"><output id="optShipScaleOut">1.0</output></div>
+    <p>高さは見た目だけのものです。計算は平面で行っているので、距離は2Dの画面と少しだけずれて見えます。艦の大きさは見やすさのために実物（数km）よりはるかに大きくしています。</p>
+    <h3>録画</h3>
+    <p>「録画」を押すと、押しているあいだの画面（字幕と帯を含む）を動画に録ります。再生の速さを決めてから録ってください。<span id="recFmt"></span></p>
+  </div>
+</aside>
+
+<div class="loading" id="loading">
+  <div class="msg" id="loadMsg">準備しています…</div>
+  <div class="prog"><div id="loadBar"></div></div>
+  <div class="err" id="loadErr" hidden></div>
+</div>
+
+<script src="engine.js"></script>
+<script src="presets.js"></script>
+<script src="models/models.js" onerror="this.remove()"></script>
+<script src="viewer3d-models.js"></script>
+<script src="viewer3d.js"></script>
+</body>
+</html>

@@ -28,6 +28,15 @@ node test/run.js                                          # エンジンのテ�
 - 勝率だけでなく、平均決着時刻・残存戦力・艦種ごとの損失も見る。時間切れ判定（`reason: time`）で決まった勝ちは、決着がついていないことに注意
 - ユーザーが画面で見られるように、変えたシナリオは `--save` で JSON に書き出し、場所を伝える（画面の「保存・読込」→「ファイルを開く」で読める）
 
+## 3Dビューア
+
+- `viewer3d.html` / `viewer3d.js` / `viewer3d-models.js`。three.js 0.170 を jsdelivr からモジュールで読む（importmap）。ネット接続が必要
+- 戦いは `engine.js` で計算し直して、記録フレームを再生する（シナリオとシードが同じなら2Dの画面と同じ結果）。2Dの画面からは localStorage の `uchusen-3d-handoff` で受け取る
+- 高さ（3Dの y）は見た目だけ（`computeHeights`）。計算には影響しない
+- 射撃の記録は `SHOT_W` = 9 個ずつ（位置・命中・陣営・時刻・撃った艦・標的）。フレームの間の射撃もすべて次のフレームにためる
+- モデルの差し替えは `models/README.md`。GLB を置いて `models/models.json` に書き、`node tools/pack-models.js`
+- こちらから見た目は確認できないので、ビューアを変えたら表示の確認をユーザーに頼む
+
 ## 守ること
 
 - 設定資料（`参考_設定資料/`、リポジトリでは一つ上のフォルダ）が正本。書き換えない。設定で決まっている数値は、通常航行 0.05c、リンク時のロックタイム45分、通信艦の再同期15分、静穏場の展開15分・維持3時間、レーン敷設 1光分あたり40分。それ以外の数値（耐久・火力・射程・回避・コストなど）は仮置きなので、自由に変えて試してよい
@@ -47,6 +56,7 @@ node test/run.js                                          # エンジンのテ�
 ## ファイル
 
 - `index.html` 画面と見た目、`ui.js` 画面の制御、`engine.js` 計算エンジン、`presets.js` 艦種の初期値とプリセット
+- `viewer3d.html` `viewer3d.js` `viewer3d-models.js` 3Dビューア、`models/` 差し替え用のモデル
 - `tools/battle.js` `tools/sweep.js` `tools/lib.js` コマンド
 - `scenarios/` プリセットの JSON（`node tools/export-presets.js` で作り直せる）
 - `test/run.js` エンジンのテスト
