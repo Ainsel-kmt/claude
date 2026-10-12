@@ -7,7 +7,7 @@
 (function (global) {
   'use strict';
 
-  const H = 3600, M = 60;
+  const H = 3600, M = 60, M_ = 60;
 
   const TYPES = {
     node: {
@@ -134,7 +134,7 @@
   function basic() {
     return {
       name: '正面衝突',
-      note: '人類（ノード艦2・ガード級16）とザイレン（ナーム級30・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。',
+      note: '人類（ノード艦2・ガード級16）とザイレン（ナーム級32・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。',
       settings: { timeLimit: 3 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 2 * M, sharing: 'comms', retreatBelow: 0.3 },
@@ -146,7 +146,7 @@
         group('guard', 0, 16, 26, 50, 0.6, 'cluster'),
         group('comms', 0, 1, 22, 50, 1, 'cluster'),
         group('picket', 0, 2, 24, 44, 2, 'column'),
-        group('narm', 1, 30, 170, 50, 0.7, 'cluster'),
+        group('narm', 1, 32, 170, 50, 0.7, 'cluster'),
         group('garmes', 1, 1, 176, 50, 1, 'cluster'),
       ),
       lanes: [{ side: 1, pts: [[230, 50], [150, 50]] }],
@@ -202,6 +202,85 @@
     };
   }
 
+  // 大規模会戦: 第7段階（ザイレンの波状展開）と第8段階（レーン延伸による迂回）をひとつの会戦にまとめた想定。
+  // o で兵力や時刻を変えられる（釣り合いを調べるため）
+  function grandBattle(o) {
+    o = Object.assign({
+      w1: 110, w2: 70, fl: 40,            // ザイレン: 第1波・予備・迂回部隊のナーム級
+      w2At: 60,                           // ザイレン予備が後方のハブに着く時刻（分）
+      n1: 5, g1: 60,                      // 人類主力のノード艦・ガード級
+      n2: 3, g2: 32, rAt: 45,             // 人類増援のノード艦・ガード級・到着時刻（分）
+    }, o || {});
+    const A = [0, 0], B = [40, 230];                 // 人類の主拠点（妨害場 半径2光分）・第2拠点（半径80光秒）
+    const H1 = [-60, -40], H2 = [200, 0], H3 = [380, 30], H4 = [320, 200];
+    const STUB = [210, 230];                         // H4 から第2拠点へ延ばしかけのレーンの先端
+    const T = [B[0] + 95, B[1]];                     // 迂回部隊がレーンを延ばす先（第2拠点の妨害場の手前）
+    const M = [140, 70];                             // 人類主力艦隊の待機位置（主拠点の妨害場の外）
+    const R = [120, 180];                            // 本国からの増援の到着点（第2拠点の妨害場の外）
+    const CUT = [225, 225];                          // 増援の静穏場艦が妨害場を張る地点（迂回部隊のレーンの付け根）
+    const reinf = { appear: o.rAt * M_, locked: true };
+    const units = [].concat(
+      // 人類: 拠点と守備隊
+      [{ type: 'base', side: 0, x: A[0], y: A[1] }],
+      group('guard', 0, 12, A[0], A[1], 1.5, 'ring', { ai: 'hold' }),
+      [{ type: 'base2', side: 0, x: B[0], y: B[1] }],
+      group('guard', 0, 8, B[0], B[1], 1.5, 'ring', { ai: 'hold' }),
+      // 人類: 主力艦隊。待機位置で第1波を迎え撃つ
+      group('node', 0, o.n1, M[0], M[1], 1.5, 'line', { ai: 'hold' }),
+      group('guard', 0, o.g1, M[0] - 2, M[1], 0.5, 'cluster'),
+      group('comms', 0, 2, M[0] - 6, M[1], 1.2, 'line'),
+      group('picket', 0, 8, M[0] + 30, M[1] - 20, 8, 'column', { ai: 'static' }),
+      // 人類: 本国からの増援。第2拠点を守り、静穏場艦は迂回部隊のレーンの付け根を断つ
+      group('node', 0, o.n2, R[0], R[1], 1.5, 'line', reinf),
+      group('guard', 0, o.g2, R[0] - 2, R[1], 0.5, 'cluster', reinf),
+      group('comms', 0, 1, R[0] - 5, R[1], 1, 'cluster', reinf),
+      withGoal(group('quiet', 0, 2, R[0] + 1, R[1] + 1, 1.2, 'line', reinf), CUT[0], CUT[1]),
+      // ザイレン: 第1波（H2）。人類主力の正面へ向かう
+      withGoal(group('narm', 1, o.w1, H2[0], H2[1], 0.6, 'cluster'), M[0] + 8, M[1] - 8),
+      withGoal(group('garmes', 1, 4, H2[0] + 3, H2[1], 2, 'line'), M[0] + 12, M[1] - 10),
+      group('elda', 1, 2, H2[0] - 3, H2[1] + 2, 2, 'column', { ai: 'hold' }),
+      // ザイレン: 予備。少し遅れて後方のハブH3に着く
+      group('narm', 1, o.w2, H3[0], H3[1], 0.6, 'cluster', { appear: o.w2At * M_ }),
+      group('garmes', 1, 3, H3[0] + 3, H3[1], 2, 'line', { appear: o.w2At * M_ }),
+      // ザイレン: 迂回部隊。エルダ級がレーンを第2拠点の手前まで延ばし、ナーム級がその先へ出る
+      withGoal(group('elda', 1, 3, STUB[0], STUB[1], 1.5, 'line'), T[0], T[1]),
+      withGoal(group('narm', 1, o.fl, H4[0], H4[1], 0.6, 'cluster'), T[0] + 10, T[1]),
+      withGoal(group('garmes', 1, 1, H4[0] + 3, H4[1], 2, 'line'), T[0] + 12, T[1]),
+    );
+    const types = pick(ALL);
+    types.base = Object.assign(types.base, { name: '人類主拠点', fieldRadius: 120, known: true });
+    types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), { name: '人類第2拠点', abbr: '拠2', hp: 4000, shield: 2500, fieldRadius: 80, cost: 15, known: true });
+    return {
+      name: '大規模会戦: S星系決戦',
+      note: '第7段階と第8段階をひとつにした想定（約370隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。数値は仮置き。',
+      settings: { timeLimit: 6 * H },
+      sides: [
+        { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
+        { name: 'ザイレン', color: 'orange', reaction: 10 * M_, sharing: 'always', retreatBelow: 0.25 },
+      ],
+      types,
+      units,
+      lanes: [
+        { side: 1, pts: [H1, H2] },
+        { side: 1, pts: [H2, [490, 20], H3] },
+        { side: 1, pts: [H3, H4] },
+        { side: 1, pts: [H2, H4] },
+        { side: 1, pts: [H4, STUB] },
+      ],
+      marks: [
+        { x: A[0], y: A[1] + 4, text: '人類主拠点' },
+        { x: B[0], y: B[1] + 4, text: '人類第2拠点' },
+        { x: H1[0], y: H1[1], text: 'H1（寸断済み）' },
+        { x: H2[0] + 6, y: H2[1] + 4, text: 'H2（第1波）' },
+        { x: H3[0], y: H3[1] + 4, text: 'H3（予備）' },
+        { x: H4[0], y: H4[1] + 4, text: 'H4（迂回部隊）' },
+        { x: M[0], y: M[1] - 6, text: '人類主力' },
+        { x: R[0], y: R[1] - 6, text: '増援の到着点（T+' + o.rAt + '分）' },
+        { x: CUT[0], y: CUT[1] + 8, text: 'レーンを断つ地点' },
+      ],
+    };
+  }
+
   function lanchester() {
     const t = JSON.parse(JSON.stringify(TYPES.generic));
     return {
@@ -240,11 +319,12 @@
     { id: 'basic', label: '正面衝突', make: basic },
     { id: 'sA', label: 'S星系外縁 A（後続が後方）', make: () => sSystem('A') },
     { id: 'sB', label: 'S星系外縁 B（後続をH2に温存）', make: () => sSystem('B') },
+    { id: 'grand', label: '大規模会戦: S星系決戦', make: grandBattle },
     { id: 'lan', label: '数の差の確認（同性能 20 対 30）', make: lanchester },
     { id: 'empty', label: '空のマップ', make: empty },
   ];
 
-  const api = { TYPES, SCENARIOS, formation };
+  const api = { TYPES, SCENARIOS, formation, builders: { grandBattle } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.SimPresets = api;
 })(typeof window !== 'undefined' ? window : globalThis);

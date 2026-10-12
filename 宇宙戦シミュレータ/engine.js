@@ -14,7 +14,7 @@
     kite: '射程維持（射程ぎりぎりを保つ）',
     hold: '持ち場防衛（持ち場の近くだけで戦う）',
     escort: '要艦の護衛（近くの要艦に付き添う）',
-    follow: '艦隊に随伴（味方の中心に付いていく）',
+    follow: '艦隊に随伴（近くの味方の塊に付いていく）',
     static: '静止（動かずに撃つ）',
   };
   const PRIORITY = {
@@ -50,7 +50,7 @@
   // ---------------------------------------------------------------- 既定値
 
   const DEFAULT_TYPE = {
-    name: '新しい艦種', abbr: '新', shape: 'circle', size: 1, cost: 1, origin: 0,
+    name: '新しい艦種', abbr: '新', shape: 'circle', size: 1, cost: 1, origin: 0, known: false,
     hp: 300, shield: 0, shieldRegen: 0, evasion: 0,
     wDamage: 10, wRange: 3, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2,
     speed: 0.05, sensor: 60, jump: 'none', lockTime: 0,
@@ -80,6 +80,7 @@
     { g: '基本', k: 'shape', label: '形', t: 'select', opts: SHAPES },
     { g: '基本', k: 'size', label: '表示の大きさ', step: 0.1, min: 0.5, max: 3 },
     { g: '基本', k: 'cost', label: 'コスト', step: 0.5, min: 0, help: '戦力の重み。戦力グラフと時間切れの判定に使う' },
+    { g: '基本', k: 'known', label: '敵に位置を知られている（拠点など）', t: 'bool', help: 'オンにすると、敵は探知しなくても最初からこの艦の位置を知っていて、狙いにくる' },
     { g: '耐久', k: 'hp', label: '船体耐久', min: 1 },
     { g: '耐久', k: 'shield', label: 'ウォード容量', min: 0, help: '被弾するとまずこちらが減る' },
     { g: '耐久', k: 'shieldRegen', label: 'ウォード回復', unit: '/秒', step: 0.1, min: 0 },
@@ -541,6 +542,8 @@
         if (e.side === k) continue;
         if (!visible(e)) { C.delete(e.id); continue; }
         const c = C.get(e.id);
+        // 「敵に位置を知られている」艦（拠点など）は、探知しなくても最初から知っている
+        if (e.def.known) { if (!c) C.set(e.id, { at: 0, last: S.t }); else c.last = S.t; continue; }
         let best = Infinity;
         for (const f of sensors) {
           const dx = f.x - e.x, dy = f.y - e.y;
@@ -622,8 +625,12 @@
     return p;
   }
 
+  // 護衛する要艦は近く（ESCORT_RANGE 以内）から選ぶ。遠くにしかいなければ護衛しない
+  const ESCORT_RANGE = 60;
+  const GROUP_RANGE = 20;
+
   function findProtectee(S, u) {
-    let best = null, bd = Infinity;
+    let best = null, bd = ESCORT_RANGE;
     for (const p of S.units) {
       if (p === u || p.side !== u.side || !active(p) || !p.def._key) continue;
       const q = p.jump ? { x: p.jump.x, y: p.jump.y } : p;
@@ -763,15 +770,26 @@
     cruise(S, u, u.x + ux / L * amount, u.y + uy / L * amount);
   }
 
+  // いちばん近い味方の武装艦を見つけ、そのまわり（GROUP_RANGE 以内）の武装艦の中心を返す。
+  // 遠くの拠点の守備隊まで平均すると、何もない場所へ向かってしまうため
   function fleetCenter(S, u) {
+    const armed = (p) => p !== u && p.side === u.side && active(p) && p.def.wDamage > 0 && p.ai !== 'follow' && (p.def.speed > 0 || p.def.jump !== 'none');
+    const at = (p) => (p.jump ? p.jump : p);
+    let near = null, nd = Infinity;
+    for (const p of S.units) {
+      if (!armed(p)) continue;
+      const q = at(p), dd = hyp(q.x - u.x, q.y - u.y);
+      if (dd < nd) { nd = dd; near = q; }
+    }
+    if (!near) return null;
     let sx = 0, sy = 0, n = 0;
     for (const p of S.units) {
-      if (p === u || p.side !== u.side || !active(p) || p.def.wDamage <= 0) continue;
-      if (p.ai === 'follow') continue;
-      const q = p.jump ? p.jump : p;
+      if (!armed(p)) continue;
+      const q = at(p);
+      if (hyp(q.x - near.x, q.y - near.y) > GROUP_RANGE) continue;
       sx += q.x; sy += q.y; n++;
     }
-    return n ? { x: sx / n, y: sy / n } : null;
+    return { x: sx / n, y: sy / n };
   }
 
   function doRetreat(S, u) {
@@ -897,9 +915,16 @@
         const p = protectee(S, u);
         if (!p) { if (tg) approach(S, u, tg, R * 0.85); return; }
         const q = p.jump ? { x: p.jump.x, y: p.jump.y } : p;
-        if (!p.jump && tg && dist(tg, p) < R * 2 + 3 && dist(u, tg) > R * 0.85) {
-          approach(S, u, tg, R * 0.85);
-          if (dist(u, p) > 3) cruise(S, u, p.x, p.y);
+        if (!p.jump && tg && dist(tg, p) < R * 2 + 3) {
+          // 要艦に近づく敵を、要艦から離れすぎない範囲で迎え撃つ
+          if (dist(u, tg) > R * 0.85) {
+            let ux = u.x - tg.x, uy = u.y - tg.y;
+            const L = hyp(ux, uy) || 1;
+            let px = tg.x + ux / L * R * 0.85, py = tg.y + uy / L * R * 0.85;
+            const leash = R * 2 + 2, hd = hyp(px - p.x, py - p.y);
+            if (hd > leash) { px = p.x + (px - p.x) / hd * leash; py = p.y + (py - p.y) / hd * leash; }
+            cruise(S, u, px, py);
+          }
         } else if (dist(u, q) > 1.5) moveTo(S, u, q.x, q.y);
         return;
       }
@@ -995,12 +1020,13 @@
 
   // ---------------------------------------------------------------- 記録・終了
 
+  // 戦力の推移: 初期を100%とした残り（まだ到着していない増援も含め、離脱した艦は除く）
   function recordHist(S) {
     S.hist.t.push(S.t);
     S.sides.forEach((_, k) => {
-      S.hist.str[k].push(S.init[k] > 0 ? strengthOf(S, k, false, false) / S.init[k] : 0);
+      S.hist.str[k].push(S.init[k] > 0 ? strengthOf(S, k, true, false) / S.init[k] : 0);
       let c = 0;
-      for (const u of S.units) if (u.side === k && active(u)) c++;
+      for (const u of S.units) if (u.side === k && u.alive && !u.escaped) c++;
       S.hist.cnt[k].push(c);
     });
   }

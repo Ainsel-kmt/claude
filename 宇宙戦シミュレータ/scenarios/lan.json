@@ -38,6 +38,7 @@
    "size": 1,
    "cost": 1,
    "origin": 0,
+   "known": false,
    "hp": 300,
    "shield": 0,
    "shieldRegen": 0,

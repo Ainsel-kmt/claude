@@ -462,7 +462,10 @@
 
   function drawGoals(sc) {
     const C = app.C;
-    ctx.strokeStyle = rgba(C.ink2, 0.45); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    // 線が多いと重なって黒い帯になるので、本数に応じて薄くする
+    let nGoal = 0;
+    for (const u of sc.units) if (u.goal && (sc.edit || app.sel.has(u.i))) nGoal++;
+    ctx.strokeStyle = rgba(C.ink2, nGoal > 20 ? Math.max(0.08, 0.45 * Math.sqrt(20 / nGoal)) : 0.45); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
     ctx.beginPath();
     const marks = [];
     for (const u of sc.units) {
@@ -1207,7 +1210,7 @@
     g.textAlign = 'left';
     if (!S) {
       g.font = '12px ' + fontUi; g.fillStyle = C.ink3; g.textBaseline = 'middle';
-      g.fillText('再生すると、両陣営の戦力（初期を100%とした残り）の推移がここに出ます', x0 + 10, (Y(0.5) + Y(1)) / 2);
+      g.fillText('再生すると、両陣営の戦力（初期を100%とした残り。到着前の増援も含む）の推移がここに出ます', x0 + 10, (Y(0.5) + Y(1)) / 2);
       return;
     }
     const ht = S.hist.t, n = ht.length;
