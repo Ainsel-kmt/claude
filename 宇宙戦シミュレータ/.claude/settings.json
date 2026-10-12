@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node tools/battle.js:*)",
+      "Bash(node tools/sweep.js:*)",
+      "Bash(node tools/export-presets.js)",
+      "Bash(node test/run.js)"
+    ]
+  }
+}

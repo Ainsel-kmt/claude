@@ -1,0 +1,1458 @@
+{
+ "name": "S星系外縁 A（後続が後方のハブ）",
+ "note": "会戦_S星系外縁.md の第7段階。人類増援はH2から2光分の地点に着いたばかり（ロックタイム45分）。ロック明けにH2の至近へ跳び、静穏場艦が妨害場を張る。ザイレンの後続50隻は後方のハブH3にいて、人類を見つけてから動くまで20分かかる。",
+ "settings": {
+  "dt": 5,
+  "timeLimit": 14400,
+  "seed": 1,
+  "jumpTime": 20,
+  "jumpMin": 15,
+  "arrivalError": 0.1,
+  "laneAccess": 2,
+  "laneJumpTime": 5,
+  "laneGap": 3,
+  "retarget": 15,
+  "drawMargin": 0.05
+ },
+ "sides": [
+  {
+   "name": "人類統合機構",
+   "color": "blue",
+   "reaction": 120,
+   "sharing": "comms",
+   "retreatBelow": 0.4
+  },
+  {
+   "name": "ザイレン",
+   "color": "orange",
+   "reaction": 1200,
+   "sharing": "always",
+   "retreatBelow": 0
+  }
+ ],
+ "types": {
+  "node": {
+   "name": "ノード艦",
+   "abbr": "N",
+   "shape": "diamond",
+   "size": 1.5,
+   "cost": 12,
+   "origin": 0,
+   "hp": 1500,
+   "shield": 1200,
+   "shieldRegen": 1.5,
+   "evasion": 0,
+   "wDamage": 60,
+   "wRange": 3.5,
+   "wInterval": 30,
+   "wAccuracy": 0.95,
+   "wFalloff": 0.1,
+   "speed": 0.05,
+   "sensor": 60,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "assault",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": true,
+   "linkRadius": 5,
+   "linkCapacity": 12,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "guard": {
+   "name": "ガード級",
+   "abbr": "G",
+   "shape": "circle",
+   "size": 1,
+   "cost": 3,
+   "origin": 0,
+   "hp": 400,
+   "shield": 300,
+   "shieldRegen": 0.3,
+   "evasion": 0,
+   "wDamage": 20,
+   "wRange": 3,
+   "wInterval": 30,
+   "wAccuracy": 0.9,
+   "wFalloff": 0.1,
+   "speed": 0.05,
+   "sensor": 30,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "escort",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "comms": {
+   "name": "通信艦",
+   "abbr": "C",
+   "shape": "square",
+   "size": 1.1,
+   "cost": 4,
+   "origin": 0,
+   "hp": 300,
+   "shield": 300,
+   "shieldRegen": 0.3,
+   "evasion": 0,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 60,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": true,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "quiet": {
+   "name": "静穏場艦",
+   "abbr": "Q",
+   "shape": "hexagon",
+   "size": 1.3,
+   "cost": 6,
+   "origin": 0,
+   "hp": 600,
+   "shield": 2500,
+   "shieldRegen": 2,
+   "evasion": 0,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 30,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": true,
+   "fieldRadius": 78,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "picket": {
+   "name": "哨戒艦",
+   "abbr": "P",
+   "shape": "triangle",
+   "size": 0.9,
+   "cost": 1,
+   "origin": 0,
+   "hp": 150,
+   "shield": 50,
+   "shieldRegen": 0.1,
+   "evasion": 0.1,
+   "wDamage": 5,
+   "wRange": 2,
+   "wInterval": 30,
+   "wAccuracy": 0.8,
+   "wFalloff": 0.2,
+   "speed": 0.08,
+   "sensor": 300,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "base": {
+   "name": "人類拠点",
+   "abbr": "拠",
+   "shape": "star",
+   "size": 2,
+   "cost": 20,
+   "origin": 0,
+   "hp": 6000,
+   "shield": 4000,
+   "shieldRegen": 3,
+   "evasion": 0,
+   "wDamage": 50,
+   "wRange": 3,
+   "wInterval": 20,
+   "wAccuracy": 0.9,
+   "wFalloff": 0.1,
+   "speed": 0,
+   "sensor": 120,
+   "jump": "none",
+   "lockTime": 0,
+   "ai": "static",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": true,
+   "fieldRadius": 180,
+   "fieldDeploy": 0,
+   "fieldDuration": 0,
+   "fieldMode": "immediate",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "narm": {
+   "name": "ナーム級",
+   "abbr": "ナ",
+   "shape": "triangle",
+   "size": 0.9,
+   "cost": 1,
+   "origin": 1,
+   "hp": 500,
+   "shield": 100,
+   "shieldRegen": 0.1,
+   "evasion": 0.3,
+   "wDamage": 10,
+   "wRange": 4,
+   "wInterval": 30,
+   "wAccuracy": 0.7,
+   "wFalloff": 0.3,
+   "speed": 0.05,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 30,
+   "ai": "assault",
+   "priority": "key",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "garmes": {
+   "name": "ガルメス級",
+   "abbr": "ガ",
+   "shape": "square",
+   "size": 1.6,
+   "cost": 8,
+   "origin": 1,
+   "hp": 2500,
+   "shield": 500,
+   "shieldRegen": 0.5,
+   "evasion": 0.05,
+   "wDamage": 40,
+   "wRange": 4.5,
+   "wInterval": 30,
+   "wAccuracy": 0.8,
+   "wFalloff": 0.2,
+   "speed": 0.04,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 60,
+   "ai": "assault",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "elda": {
+   "name": "エルダ級",
+   "abbr": "エ",
+   "shape": "diamond",
+   "size": 1.2,
+   "cost": 5,
+   "origin": 1,
+   "hp": 800,
+   "shield": 100,
+   "shieldRegen": 0.1,
+   "evasion": 0.1,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 30,
+   "ai": "hold",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": true,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  }
+ },
+ "units": [
+  {
+   "type": "base",
+   "side": 0,
+   "x": 0,
+   "y": 0
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 1.2,
+   "y": 0,
+   "ai": "hold"
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 0.6,
+   "y": 1.04,
+   "ai": "hold"
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": -0.6,
+   "y": 1.04,
+   "ai": "hold"
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": -1.2,
+   "y": 0,
+   "ai": "hold"
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": -0.6,
+   "y": -1.04,
+   "ai": "hold"
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 0.6,
+   "y": -1.04,
+   "ai": "hold"
+  },
+  {
+   "type": "node",
+   "side": 0,
+   "x": 300,
+   "y": -121.2,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.83,
+    -2.99
+   ]
+  },
+  {
+   "type": "node",
+   "side": 0,
+   "x": 300,
+   "y": -120,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.83,
+    -1.79
+   ]
+  },
+  {
+   "type": "node",
+   "side": 0,
+   "x": 300,
+   "y": -118.8,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.83,
+    -0.59
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.5,
+   "y": -120,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.33,
+    -1.79
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.3,
+   "y": -119.81,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.13,
+    -1.6
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.53,
+   "y": -120.39,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.36,
+    -2.18
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.79,
+   "y": -119.62,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.62,
+    -1.41
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.96,
+   "y": -120.1,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.79,
+    -1.89
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.02,
+   "y": -120.33,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.85,
+    -2.12
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.33,
+   "y": -119.35,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.16,
+    -1.14
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.16,
+   "y": -120.65,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.99,
+    -2.44
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.23,
+   "y": -119.73,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.06,
+    -1.52
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.74,
+   "y": -119.69,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.57,
+    -1.48
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.87,
+   "y": -120.79,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.7,
+    -2.58
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.77,
+   "y": -119.13,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.6,
+    -0.92
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.68,
+   "y": -120.48,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.51,
+    -2.27
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.47,
+   "y": -120.21,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.3,
+    -2
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.91,
+   "y": -119.16,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.74,
+    -0.95
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.36,
+   "y": -121.06,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.19,
+    -2.85
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.34,
+   "y": -119.29,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.17,
+    -1.08
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.37,
+   "y": -119.95,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.2,
+    -1.74
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.33,
+   "y": -120.82,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.16,
+    -2.61
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.44,
+   "y": -118.8,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.27,
+    -0.59
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.71,
+   "y": -120.94,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.54,
+    -2.73
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 299.75,
+   "y": -119.83,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.58,
+    -1.62
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 297.44,
+   "y": -119.26,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.27,
+    -1.05
+   ]
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 298.79,
+   "y": -121.29,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.62,
+    -3.08
+   ]
+  },
+  {
+   "type": "comms",
+   "side": 0,
+   "x": 296.5,
+   "y": -120,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    298.33,
+    -1.79
+   ]
+  },
+  {
+   "type": "quiet",
+   "side": 0,
+   "x": 301.2,
+   "y": -118.6,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    303.03,
+    -0.39
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 295.5,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    297.33,
+    -4.29
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 296.3,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    298.13,
+    -4.29
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 297.1,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    298.93,
+    -4.29
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 297.9,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    299.73,
+    -4.29
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 298.7,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    300.53,
+    -4.29
+   ]
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 299.5,
+   "y": -122.5,
+   "move": "jump",
+   "locked": true,
+   "goal": [
+    301.33,
+    -4.29
+   ]
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300,
+   "y": 0,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.76,
+   "y": 0.22,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.04,
+   "y": -0.46,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.35,
+   "y": 0.45,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.35,
+   "y": -0.11,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.62,
+   "y": -0.4,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.79,
+   "y": 0.78,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.6,
+   "y": -0.77,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.88,
+   "y": 0.32,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.08,
+   "y": 0.38,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.44,
+   "y": -0.95,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.33,
+   "y": 1.04,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.01,
+   "y": -0.57,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 301.16,
+   "y": -0.26,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.29,
+   "y": 1.01,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.84,
+   "y": -1.27,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 301.01,
+   "y": 0.85,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 298.64,
+   "y": 0.06,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.99,
+   "y": -0.99,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.93,
+   "y": 1.44,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.05,
+   "y": -1.13,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 301.5,
+   "y": 0.2,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 298.73,
+   "y": 0.88,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.35,
+   "y": -1.54,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 300.8,
+   "y": 1.4,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 298.43,
+   "y": -0.5,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 301.53,
+   "y": -0.71,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.34,
+   "y": 1.58,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 299.41,
+   "y": -1.64,
+   "ai": "hold"
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 301.57,
+   "y": 0.83,
+   "ai": "hold"
+  },
+  {
+   "type": "garmes",
+   "side": 1,
+   "x": 301,
+   "y": 1,
+   "ai": "hold"
+  },
+  {
+   "type": "elda",
+   "side": 1,
+   "x": 298.5,
+   "y": 1
+  },
+  {
+   "type": "elda",
+   "side": 1,
+   "x": 299.5,
+   "y": 1
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620,
+   "y": 40
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.76,
+   "y": 40.22
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.04,
+   "y": 39.54
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.35,
+   "y": 40.45
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.35,
+   "y": 39.89
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.62,
+   "y": 39.6
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.79,
+   "y": 40.78
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.6,
+   "y": 39.23
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.88,
+   "y": 40.32
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.08,
+   "y": 40.38
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.44,
+   "y": 39.05
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.33,
+   "y": 41.04
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.01,
+   "y": 39.43
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.16,
+   "y": 39.74
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.29,
+   "y": 41.01
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.84,
+   "y": 38.73
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.01,
+   "y": 40.85
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.64,
+   "y": 40.06
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.99,
+   "y": 39.01
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.93,
+   "y": 41.44
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.05,
+   "y": 38.87
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.5,
+   "y": 40.2
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.73,
+   "y": 40.88
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.35,
+   "y": 38.46
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.8,
+   "y": 41.4
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.43,
+   "y": 39.5
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.53,
+   "y": 39.29
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.34,
+   "y": 41.58
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.41,
+   "y": 38.36
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.57,
+   "y": 40.83
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.25,
+   "y": 40.46
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.99,
+   "y": 38.45
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.32,
+   "y": 41.84
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.5,
+   "y": 38.84
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.92,
+   "y": 39.84
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.67,
+   "y": 41.43
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.01,
+   "y": 38.02
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.35,
+   "y": 41.49
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 617.97,
+   "y": 39.81
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 621.64,
+   "y": 38.75
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.63,
+   "y": 42.05
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.87,
+   "y": 38.21
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 622.06,
+   "y": 40.56
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.07,
+   "y": 40.99
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.76,
+   "y": 37.95
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 620.83,
+   "y": 42.05
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 617.98,
+   "y": 39.04
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 622.16,
+   "y": 39.33
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 618.84,
+   "y": 41.97
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 619.51,
+   "y": 37.74
+  }
+ ],
+ "lanes": [
+  {
+   "side": 1,
+   "pts": [
+    [
+     -100,
+     -60
+    ],
+    [
+     300,
+     0
+    ]
+   ]
+  },
+  {
+   "side": 1,
+   "pts": [
+    [
+     300,
+     0
+    ],
+    [
+     460,
+     10
+    ],
+    [
+     620,
+     40
+    ]
+   ]
+  },
+  {
+   "side": 1,
+   "pts": [
+    [
+     300,
+     0
+    ],
+    [
+     380,
+     200
+    ]
+   ]
+  }
+ ],
+ "marks": [
+  {
+   "x": 306,
+   "y": 4,
+   "text": "H2（ザイレンのハブ）"
+  },
+  {
+   "x": -100,
+   "y": -60,
+   "text": "H1（寸断済み）"
+  },
+  {
+   "x": 620,
+   "y": 40,
+   "text": "H3（後方のハブ）"
+  },
+  {
+   "x": 292,
+   "y": -124,
+   "text": "人類増援の到着点"
+  },
+  {
+   "x": 0,
+   "y": 4,
+   "text": "人類拠点"
+  }
+ ],
+ "version": 1
+}

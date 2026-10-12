@@ -1,0 +1,717 @@
+{
+ "name": "正面衝突",
+ "note": "人類（ノード艦2・ガード級16）とザイレン（ナーム級30・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。",
+ "settings": {
+  "dt": 5,
+  "timeLimit": 10800,
+  "seed": 1,
+  "jumpTime": 20,
+  "jumpMin": 15,
+  "arrivalError": 0.1,
+  "laneAccess": 2,
+  "laneJumpTime": 5,
+  "laneGap": 3,
+  "retarget": 15,
+  "drawMargin": 0.05
+ },
+ "sides": [
+  {
+   "name": "人類統合機構",
+   "color": "blue",
+   "reaction": 120,
+   "sharing": "comms",
+   "retreatBelow": 0.3
+  },
+  {
+   "name": "ザイレン",
+   "color": "orange",
+   "reaction": 300,
+   "sharing": "always",
+   "retreatBelow": 0
+  }
+ ],
+ "types": {
+  "node": {
+   "name": "ノード艦",
+   "abbr": "N",
+   "shape": "diamond",
+   "size": 1.5,
+   "cost": 12,
+   "origin": 0,
+   "hp": 1500,
+   "shield": 1200,
+   "shieldRegen": 1.5,
+   "evasion": 0,
+   "wDamage": 60,
+   "wRange": 3.5,
+   "wInterval": 30,
+   "wAccuracy": 0.95,
+   "wFalloff": 0.1,
+   "speed": 0.05,
+   "sensor": 60,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "assault",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": true,
+   "linkRadius": 5,
+   "linkCapacity": 12,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "guard": {
+   "name": "ガード級",
+   "abbr": "G",
+   "shape": "circle",
+   "size": 1,
+   "cost": 3,
+   "origin": 0,
+   "hp": 400,
+   "shield": 300,
+   "shieldRegen": 0.3,
+   "evasion": 0,
+   "wDamage": 20,
+   "wRange": 3,
+   "wInterval": 30,
+   "wAccuracy": 0.9,
+   "wFalloff": 0.1,
+   "speed": 0.05,
+   "sensor": 30,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "escort",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "comms": {
+   "name": "通信艦",
+   "abbr": "C",
+   "shape": "square",
+   "size": 1.1,
+   "cost": 4,
+   "origin": 0,
+   "hp": 300,
+   "shield": 300,
+   "shieldRegen": 0.3,
+   "evasion": 0,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 60,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": true,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "quiet": {
+   "name": "静穏場艦",
+   "abbr": "Q",
+   "shape": "hexagon",
+   "size": 1.3,
+   "cost": 6,
+   "origin": 0,
+   "hp": 600,
+   "shield": 2500,
+   "shieldRegen": 2,
+   "evasion": 0,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 30,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": true,
+   "fieldRadius": 78,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "picket": {
+   "name": "哨戒艦",
+   "abbr": "P",
+   "shape": "triangle",
+   "size": 0.9,
+   "cost": 1,
+   "origin": 0,
+   "hp": 150,
+   "shield": 50,
+   "shieldRegen": 0.1,
+   "evasion": 0.1,
+   "wDamage": 5,
+   "wRange": 2,
+   "wInterval": 30,
+   "wAccuracy": 0.8,
+   "wFalloff": 0.2,
+   "speed": 0.08,
+   "sensor": 300,
+   "jump": "free",
+   "lockTime": 10800,
+   "ai": "follow",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "base": {
+   "name": "人類拠点",
+   "abbr": "拠",
+   "shape": "star",
+   "size": 2,
+   "cost": 20,
+   "origin": 0,
+   "hp": 6000,
+   "shield": 4000,
+   "shieldRegen": 3,
+   "evasion": 0,
+   "wDamage": 50,
+   "wRange": 3,
+   "wInterval": 20,
+   "wAccuracy": 0.9,
+   "wFalloff": 0.1,
+   "speed": 0,
+   "sensor": 120,
+   "jump": "none",
+   "lockTime": 0,
+   "ai": "static",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": true,
+   "fieldRadius": 180,
+   "fieldDeploy": 0,
+   "fieldDuration": 0,
+   "fieldMode": "immediate",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "narm": {
+   "name": "ナーム級",
+   "abbr": "ナ",
+   "shape": "triangle",
+   "size": 0.9,
+   "cost": 1,
+   "origin": 1,
+   "hp": 500,
+   "shield": 100,
+   "shieldRegen": 0.1,
+   "evasion": 0.3,
+   "wDamage": 10,
+   "wRange": 4,
+   "wInterval": 30,
+   "wAccuracy": 0.7,
+   "wFalloff": 0.3,
+   "speed": 0.05,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 30,
+   "ai": "assault",
+   "priority": "key",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "garmes": {
+   "name": "ガルメス級",
+   "abbr": "ガ",
+   "shape": "square",
+   "size": 1.6,
+   "cost": 8,
+   "origin": 1,
+   "hp": 2500,
+   "shield": 500,
+   "shieldRegen": 0.5,
+   "evasion": 0.05,
+   "wDamage": 40,
+   "wRange": 4.5,
+   "wInterval": 30,
+   "wAccuracy": 0.8,
+   "wFalloff": 0.2,
+   "speed": 0.04,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 60,
+   "ai": "assault",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": false,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  },
+  "elda": {
+   "name": "エルダ級",
+   "abbr": "エ",
+   "shape": "diamond",
+   "size": 1.2,
+   "cost": 5,
+   "origin": 1,
+   "hp": 800,
+   "shield": 100,
+   "shieldRegen": 0.1,
+   "evasion": 0.1,
+   "wDamage": 0,
+   "wRange": 0,
+   "wInterval": 30,
+   "wAccuracy": 0,
+   "wFalloff": 0,
+   "speed": 0.05,
+   "sensor": 200,
+   "jump": "lane",
+   "lockTime": 30,
+   "ai": "hold",
+   "priority": "nearest",
+   "retreatAt": 0,
+   "linkOn": false,
+   "linkRadius": 5,
+   "linkCapacity": 10,
+   "linkLock": 2700,
+   "linkBonus": 0.3,
+   "fieldOn": false,
+   "fieldRadius": 60,
+   "fieldDeploy": 900,
+   "fieldDuration": 10800,
+   "fieldMode": "arrive",
+   "commsOn": false,
+   "commsResync": 900,
+   "layerOn": true,
+   "layerSpeed": 0.025,
+   "layerMax": 300
+  }
+ },
+ "units": [
+  {
+   "type": "node",
+   "side": 0,
+   "x": 30,
+   "y": 49
+  },
+  {
+   "type": "node",
+   "side": 0,
+   "x": 30,
+   "y": 51
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26,
+   "y": 50
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.76,
+   "y": 50.22
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.04,
+   "y": 49.54
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.35,
+   "y": 50.45
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.35,
+   "y": 49.89
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.62,
+   "y": 49.6
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.79,
+   "y": 50.78
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.6,
+   "y": 49.23
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.88,
+   "y": 50.32
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.08,
+   "y": 50.38
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.44,
+   "y": 49.05
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 26.33,
+   "y": 51.04
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.01,
+   "y": 49.43
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 27.16,
+   "y": 49.74
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.29,
+   "y": 51.01
+  },
+  {
+   "type": "guard",
+   "side": 0,
+   "x": 25.84,
+   "y": 48.73
+  },
+  {
+   "type": "comms",
+   "side": 0,
+   "x": 22,
+   "y": 50
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 23,
+   "y": 44
+  },
+  {
+   "type": "picket",
+   "side": 0,
+   "x": 25,
+   "y": 44
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170,
+   "y": 50
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.72,
+   "y": 50.26
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.05,
+   "y": 49.46
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.41,
+   "y": 50.53
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.24,
+   "y": 49.87
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.73,
+   "y": 49.54
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.76,
+   "y": 50.91
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.53,
+   "y": 49.1
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.02,
+   "y": 50.37
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.93,
+   "y": 50.44
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.52,
+   "y": 48.9
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.38,
+   "y": 51.22
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.85,
+   "y": 49.33
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.36,
+   "y": 49.7
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.17,
+   "y": 51.18
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.81,
+   "y": 48.52
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.18,
+   "y": 50.99
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.41,
+   "y": 50.07
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.16,
+   "y": 48.85
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.92,
+   "y": 51.68
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.9,
+   "y": 48.68
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.75,
+   "y": 50.24
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.52,
+   "y": 51.03
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.41,
+   "y": 48.2
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 170.94,
+   "y": 51.64
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 168.17,
+   "y": 49.42
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.78,
+   "y": 49.18
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.23,
+   "y": 51.85
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 169.31,
+   "y": 48.08
+  },
+  {
+   "type": "narm",
+   "side": 1,
+   "x": 171.84,
+   "y": 50.96
+  },
+  {
+   "type": "garmes",
+   "side": 1,
+   "x": 176,
+   "y": 50
+  }
+ ],
+ "lanes": [
+  {
+   "side": 1,
+   "pts": [
+    [
+     230,
+     50
+    ],
+    [
+     150,
+     50
+    ]
+   ]
+  }
+ ],
+ "marks": [],
+ "version": 1
+}
