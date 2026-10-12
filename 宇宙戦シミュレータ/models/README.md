@@ -56,10 +56,10 @@ node tools/pack-models.js
 
 | 艦種ID | 長さ | | 艦種ID | 長さ |
 |---|---|---|---|---|
-| node | 0.55 | | narm | 0.26 |
-| guard | 0.3 | | garmes | 0.85 |
-| comms | 0.34 | | elda | 0.5 |
-| quiet | 0.45 | | base | 3.2 |
-| picket | 0.2 | | base2 | 2.6 |
+| node | 0.3 | | narm | 0.14 |
+| guard | 0.16 | | garmes | 0.45 |
+| comms | 0.18 | | elda | 0.26 |
+| quiet | 0.24 | | base | 2.0 |
+| picket | 0.11 | | base2 | 1.6 |
 
-ここにない艦種は 0.3 × 表示の大きさ（動かない拠点は 2.4 ×）です。
+ここにない艦種は 0.16 × 表示の大きさ（動かない拠点は 1.5 ×）です。

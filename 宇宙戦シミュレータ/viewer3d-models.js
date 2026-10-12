@@ -24,8 +24,8 @@
 
     // 艦種ごとの既定の長さ（光秒）。実物（数km）よりはるかに大きく誇張している
     const BASE_LENGTH = {
-      node: 0.55, guard: 0.3, comms: 0.34, quiet: 0.45, picket: 0.2, base: 3.2, base2: 2.6,
-      narm: 0.26, garmes: 0.85, elda: 0.5, generic: 0.3,
+      node: 0.3, guard: 0.16, comms: 0.18, quiet: 0.24, picket: 0.11, base: 2.0, base2: 1.6,
+      narm: 0.14, garmes: 0.45, elda: 0.26, generic: 0.16,
     };
 
     // ---------------------------------------------------------------- 部品
@@ -161,8 +161,8 @@
 
     function defaultLength(tid, def) {
       if (BASE_LENGTH[tid]) return BASE_LENGTH[tid];
-      if (def.speed <= 0 && def.jump === 'none') return 2.4 * (def.size || 1);
-      return 0.3 * (def.size || 1);
+      if (def.speed <= 0 && def.jump === 'none') return 1.5 * (def.size || 1);
+      return 0.16 * (def.size || 1);
     }
 
     // ---------------------------------------------------------------- GLB の差し替え

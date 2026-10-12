@@ -812,7 +812,7 @@
       if (e.kind === 'death') {
         const dur = simDur(e.big ? 14 : 8, e.big ? 2.4 : 1.6), p = age / dur;
         if (p > 1) continue;
-        const sz = Math.max(len * 2.2, 0.45) * (e.big ? 1.6 : 1);
+        const sz = Math.max(len * 2.2, 0.3) * (e.big ? 1.6 : 1);
         sprite('flare', e.x, y, e.y, sz * (0.8 + p * 0.6), COL.flash, Math.max(0, 1 - p * 3));
         sprite('smoke', e.x, y, e.y, sz * (0.5 + p * 1.1), COL.fire, Math.max(0, 1 - p * 1.2) * 0.9, k);
         sprite('smoke', e.x, y, e.y, sz * (0.7 + p * 1.5), COL.smoke, Math.max(0, 0.6 - p * 0.6), k + 1);
@@ -983,8 +983,8 @@
       const i = mode === 'follow' ? V.follow : plan.i;
       const st = world.unitState[i];
       if (st && st.vis) {
-        const len = V.R.S.units[i] ? V.models.defaultLength(R.S.units[i].tid, R.S.units[i].def) * V.opts.shipScale : 0.3;
-        return { x: st.pos.x, y: st.pos.y, z: st.pos.z, dist: Math.max(len * 14, 2.5) * (plan ? plan.zoom : 1), unit: i };
+        const len = V.R.S.units[i] ? V.models.defaultLength(R.S.units[i].tid, R.S.units[i].def) * V.opts.shipScale : 0.16;
+        return { x: st.pos.x, y: st.pos.y, z: st.pos.z, dist: Math.max(len * 14, 1.6) * (plan ? plan.zoom : 1), unit: i };
       }
       return null;
     }
