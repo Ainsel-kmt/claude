@@ -1885,6 +1885,11 @@
   // 3Dビューアへ: シナリオ・シード・いまの時刻をブラウザの保存領域で渡し、別のタブで開く
   $('view3dBtn').onclick = () => {
     if (!app.scn.units.length) { toast('先に艦を配置してください'); return; }
+    // claude.ai の公開ページは枠の中でしか表示できず、別のタブで開くと拒否される
+    if (location.protocol !== 'file:' && /(^|\.)claude\.(ai|com)$|claudeusercontent/.test(location.hostname)) {
+      toast('公開ページからは3Dビューアを開けません。ZIP 版の index.html を手元で開いて「3Dで見る」を押してください');
+      return;
+    }
     const payload = { v: 1, scenario: app.scn, seed: app.scn.settings.seed, t: app.sim ? app.sim.frames[app.fi].t : 0, at: Date.now() };
     try { localStorage.setItem('uchusen-3d-handoff', JSON.stringify(payload)); } catch (e) { toast('ブラウザに保存できないため、3Dビューアへ渡せません。ビューアの「シナリオ」から JSON を開いてください'); return; }
     const w = window.open('viewer3d.html', 'uchusen3d');
