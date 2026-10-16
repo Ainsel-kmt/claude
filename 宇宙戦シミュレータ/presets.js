@@ -122,17 +122,17 @@
       pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
     },
     // ザイレンの巨大旗艦（2026-10-16 に追加。設定資料にはない、シミュレータだけの艦種。級名・数値は仮置き）。
-    // 動くハブ（進みながら後ろにレーンを敷き、網の味方がそばまで跳べる）・攻城線砲（10分溜めて、線の上の敵すべてを貫く）・
+    // 動くハブ（進みながら後ろにレーンを敷き、網の味方がそばまで跳べる）・攻城線砲（5分溜めて、線の上の敵すべてを貫く）・
     // 方舟（ナーム級を積んで運び、敵を見つけたら30秒ごとに2隻ずつ出す）をひとつにまとめた。大きさは拠点くらい
     flagship: {
       name: 'オルドラ級', abbr: 'オ', shape: 'hexagon', size: 2.6, cost: 30, origin: 1,
       hp: 6000, shield: 4000, shieldRegen: 3, evasion: 0,
       wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 8,
-      speed: 0.02, sensor: 40, jump: 'lane', lockTime: 60,
+      speed: 0.02, sensor: 30, jump: 'lane', lockTime: 60,
       ai: 'hold', priority: 'nearest', retreatAt: 0,
       pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
       sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
-      sAmmo: 0, sMinCount: 3, sCharge: 10 * M, sWidth: 0.3,
+      sAmmo: 0, sMinCount: 3, sCharge: 5 * M, sWidth: 0.3,
       hubOn: true, hubSpeed: 60 / (40 * M),
       hangarOn: true, hangarCap: 40, hangarInterval: 30, hangarBatch: 2,
     },
@@ -442,7 +442,7 @@
     units.push(...group('narm', 1, 40, H3[0], H3[1], 0.6, 'cluster', { appear: 50 * M_ }));
     return {
       name: '巨大艦の試し',
-      note: 'ザイレンの旗艦（オルドラ級。シミュレータだけの仮の艦種）の3つのしくみを見る場面。旗艦はH2から人類の主力へ向かって進みながら、後ろにレーンを敷く（動くハブ）。T+50分に後方のハブH3に着く予備（ナーム級40）は、そのレーンで旗艦のそばまで跳んでくる。旗艦は積んできたナーム級30を、敵を見つけると30秒ごとに2隻ずつ出す（方舟）。人類の主力が30光秒に入ると、10分溜めて、線の上に並ぶ敵すべてを貫く（攻城線砲）。人類はT+70分に静穏場艦を旗艦のレーンの途中へ送り、妨害場でレーンを断つ。旗艦が沈むと、旗艦が敷いたレーンは消え、積まれたままの艦も沈む。数値は仮置き。',
+      note: 'ザイレンの旗艦（オルドラ級。シミュレータだけの仮の艦種）の3つのしくみを見る場面。旗艦はH2から人類の主力へ向かって進みながら、後ろにレーンを敷く（動くハブ）。T+50分に後方のハブH3に着く予備（ナーム級40）は、そのレーンで旗艦のそばまで跳んでくる。旗艦は積んできたナーム級30を、敵を見つけると30秒ごとに2隻ずつ出す（方舟）。人類の主力が30光秒に入ると、5分溜めて、線の上に並ぶ敵すべてを貫く（攻城線砲）。人類はT+70分に静穏場艦を旗艦のレーンの途中へ送り、妨害場でレーンを断つ。旗艦が沈むと、旗艦が敷いたレーンは消え、積まれたままの艦も沈む。数値は仮置き。',
       settings: { timeLimit: 4 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
