@@ -1201,11 +1201,11 @@
   // ---------------------------------------------------------------- 効果音
 
   // 前のコマから今のコマまでに起きたこと（射撃・撃沈・ジャンプ・シェル・妨害場など）を拾って鳴らす。
-  // 左右は画面での位置、大きさはカメラからの距離（見ている距離に合わせる）で決める。
+  // 左右は画面での位置、大きさはカメラからの距離（見ている距離に合わせる）で決める。遠い音はこもらせ、響きを多めにする。
   // 早送りでは数が多いので、種類ごとに大きい順に数本だけ鳴らし、数が多いほど少し大きくする。
   // 巻き戻したときや、時刻を飛ばしたときは鳴らさない
   const SFX = {
-    beam: { gain: 0.32, max: 2, gap: 0.06 }, drone: { gain: 0.4, max: 1, gap: 0.1 }, intercept: { gain: 0.5, max: 2, gap: 0.08 },
+    beam: { gain: 0.32, max: 2, gap: 0.09 }, drone: { gain: 0.4, max: 1, gap: 0.12 }, intercept: { gain: 0.5, max: 2, gap: 0.08 },
     death: { gain: 0.75, max: 3, gap: 0.07 }, deathBig: { gain: 1.0, max: 2, gap: 0.15 },
     shellLaunch: { gain: 0.9, max: 2, gap: 0.12 }, shellBoom: { gain: 1.0, max: 3, gap: 0.1 }, missile: { gain: 0.45, max: 2, gap: 0.1 },
     jumpIn: { gain: 0.5, max: 2, gap: 0.12 }, jumpOut: { gain: 0.5, max: 2, gap: 0.12 }, lane: { gain: 0.3, max: 2, gap: 0.1 },
@@ -1297,7 +1297,7 @@
       const n = Math.min(cfg.max, e.items.length);
       for (let j = 0; j < n; j++) {
         const it = e.items[j];
-        A.play(e.name, { gain: cfg.gain * it.g * boost * (j ? 0.6 : 1), pan: it.pan, side: e.side, size: it.size, when: A.ctx.currentTime + 0.01 + j * 0.035 });
+        A.play(e.name, { gain: cfg.gain * it.g * boost * (j ? 0.6 : 1), pan: it.pan, side: e.side, size: it.size, near: it.g, when: A.ctx.currentTime + 0.01 + j * 0.035 });
       }
       sfxLast[key] = now;
     }
