@@ -1421,7 +1421,8 @@
 
   // ---- シェル型: 超遠距離から敵の群れへ見越しで撃ち込む面制圧
   // 狙う点: 見えている敵それぞれについて、いまの向きと速さのまま進むとして着弾の時刻にいる点を求め、
-  // その敵のまわり（爆発半径の中）にいまいる敵の数（群れはまとまって動く）がいちばん多い点を選ぶ。
+  // その敵のまわり（爆発半径の中）にいまいる敵（群れはまとまって動く）のコストの合計（コスト × 数）がいちばん大きい点を選ぶ。
+  // 範囲に入る敵の数が「撃つのに要る敵の数」より少ない群れには撃たない。
   // 撃たれる側は気づかないので、外れるのは針路や速さを変えたときと、命中率の外れだけ
   const SHELL_SCAN = 30;       // 撃てる群れが見つからないとき、次に探すまでの秒数
 
@@ -1464,16 +1465,16 @@
       if (!(t > 0)) continue;
       const px = e.x + e.vx * t, py = e.y + e.vy * t;
       if (hyp(px - u.x, py - u.y) > d.sRange) continue;
-      // その群れの数: いま e から爆発半径の中にいる敵（すでに別の弾で狙った艦は数えない）
-      let n = 0;
+      // その群れの数とコストの合計: いま e から爆発半径の中にいる敵（すでに別の弾で狙った艦は数えない）
+      let n = 0, v = 0;
       const cx = Math.floor(e.x / R), cy = Math.floor(e.y / R);
       for (let ax = -1; ax <= 1; ax++) for (let ay = -1; ay <= 1; ay++) {
         const l = g.get((cx + ax) + ',' + (cy + ay));
         if (!l) continue;
-        for (const f of l) if (!(taken && taken.has(f.id)) && hyp(f.x - e.x, f.y - e.y) <= R) n++;
+        for (const f of l) if (!(taken && taken.has(f.id)) && hyp(f.x - e.x, f.y - e.y) <= R) { n++; v += f.def.cost; }
       }
       if (n < need) continue;
-      if (!best || n > best.n || (n === best.n && t < best.t)) best = { x: px, y: py, n, t, e };
+      if (!best || v > best.v || (v === best.v && t < best.t)) best = { x: px, y: py, n, v, t, e };
     }
     return best;
   }

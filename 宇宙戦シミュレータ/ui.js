@@ -1623,7 +1623,7 @@
         } else if (d.sKind !== 'line') {
           const fl = d.sRange / Math.max(1e-3, d.sSpeed);
           t += '射程いっぱいまで届くのに' + (fl < 120 ? num(fl, 0) + '秒' : num(fl / 60, 1) + '分') + '。';
-          if (d.sKind === 'shell') t += '敵の群れの進む先を見越して撃ち込み、着いた点で爆発する（撃たれる側は気づかない。針路や速さを変えると外れる）。爆発の範囲に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上入る群れにだけ撃つ。';
+          if (d.sKind === 'shell') t += '敵の群れの進む先を見越して撃ち込み、着いた点で爆発する（撃たれる側は気づかない。針路や速さを変えると外れる）。爆発の範囲に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上入る群れのうち、コストの合計がいちばん大きい群れへ撃つ。';
         }
         if (d.sBypass > 0) t += '損害の' + num(d.sBypass * 100, 0) + '%はウォードを素通りする。';
         if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone' && d.sKind !== 'lance') t += '爆発の半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の中の敵すべてに威力いっぱい。';

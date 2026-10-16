@@ -286,6 +286,15 @@ for (const p of P.SCENARIOS) {
   ], cfg), 1500);
   check('シェル: まっすぐ進む敵には見越しで当たる', lost(M, 1) === 600, lost(M, 1));
 
+  // 狙う群れ: 範囲に入る敵のコストの合計がいちばん大きい群れ（安い3隻の群れより、高い1隻）
+  const rich = Object.assign(clone(still), { cost: 5 });
+  const V = runFor(scn({ a: gun(), b: still, r: rich }, [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 40, y: 0 }, { type: 'b', side: 1, x: 40, y: 0.5 }, { type: 'b', side: 1, x: 40.5, y: -0.4 },
+    { type: 'r', side: 1, x: 0, y: 40 },
+  ], cfg), 1200);
+  check('シェル: コストの合計が大きい群れを狙う（安い3隻より高い1隻）', lost(V, 4) === 600 && [1, 2, 3].every((i) => lost(V, i) === 0), [1, 2, 3, 4].map((i) => lost(V, i)));
+
   // 撃つのに要る敵の数: 群れが小さければ撃たない
   const C = runFor(scn({ a: gun({ sMinCount: 3 }), b: still }, [
     { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 40, y: 0 }, { type: 'b', side: 1, x: 40, y: 0.5 },

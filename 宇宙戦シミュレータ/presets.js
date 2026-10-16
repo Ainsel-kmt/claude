@@ -10,10 +10,10 @@
   const H = 3600, M = 60, M_ = 60;
   // シェル系統（慣性弾）の副兵装の共通値。戦闘が始まる前に、超遠距離（60光秒）から敵の群れの進む先を見越して撃ち込む先制の一撃。
   // 着いた点で爆発し、半径1光秒の中の敵すべてにナーム級を一撃で沈める損害（減衰なし）。撃たれる側は気づかない。
-  // 弾数に限りがあり（味方の拠点の近くで補充）、範囲に3隻以上入る群れにだけ撃つ。
+  // 弾数に限りがあり（味方の拠点の近くで補充）、範囲に3隻以上入る群れのうち、コストの合計がいちばん大きい群れへ撃つ。弾速0.1c。
   // ウォードは歪曲への防御なので、実体弾は素通りする想定
   const SHELL = {
-    sOn: true, sKind: 'shell', sDamage: 600, sRange: 60, sInterval: 600, sAccuracy: 0.9, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 1,
+    sOn: true, sKind: 'shell', sDamage: 600, sRange: 60, sInterval: 600, sAccuracy: 0.9, sFalloff: 0, sMounts: 1, sSpeed: 0.1, sBypass: 1,
     sBlast: 1, sAmmo: 4, sMinCount: 3, sReturn: false,
   };
 
