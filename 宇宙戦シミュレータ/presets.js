@@ -74,6 +74,7 @@
       wDamage: 10, wRange: 4, wInterval: 30, wAccuracy: 0.7, wFalloff: 0.3,
       speed: 0.05, sensor: 200, jump: 'lane', lockTime: 30,
       ai: 'assault', priority: 'key', retreatAt: 0,
+      pdOn: true, pdRange: 0.5, pdChance: 0.1, pdInterval: 20,
     },
     garmes: {
       name: 'ガルメス級', abbr: 'ガ', shape: 'square', size: 1.6, cost: 8, origin: 1,
@@ -81,6 +82,7 @@
       wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 4,
       speed: 0.04, sensor: 200, jump: 'lane', lockTime: 60,
       ai: 'assault', priority: 'nearest', retreatAt: 0,
+      pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
     },
     elda: {
       name: 'エルダ級', abbr: 'エ', shape: 'diamond', size: 1.2, cost: 5, origin: 1,
@@ -100,9 +102,9 @@
       ai: 'follow', priority: 'nearest', retreatAt: 0,
       ...SHELL, sInterval: 300, sMounts: 2, sAmmo: 6, sReturn: true,
     },
-    // 設定にない試作の艦種（副兵装の誘導弾・無人機を試すため）。数値は仮置き
+    // 誘導弾・無人機を積む艦種（2026-10-16 に正式な艦種にした。設定資料にはまだない）。数値は仮置き
     missile: {
-      name: 'ミサイル艦（試作）', abbr: 'ミ', shape: 'triangle', size: 1.2, cost: 6, origin: 0,
+      name: 'ミサイル艦', abbr: 'ミ', shape: 'triangle', size: 1.2, cost: 6, origin: 0,
       hp: 500, shield: 400, shieldRegen: 0.5, evasion: 0,
       wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
@@ -111,7 +113,7 @@
       pdOn: true, pdRange: 1, pdChance: 0.3, pdInterval: 10,
     },
     carrier: {
-      name: '無人機母艦（試作）', abbr: '母', shape: 'square', size: 1.6, cost: 10, origin: 0,
+      name: '無人機母艦', abbr: '母', shape: 'square', size: 1.6, cost: 10, origin: 0,
       hp: 1500, shield: 1000, shieldRegen: 1, evasion: 0,
       wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
@@ -175,7 +177,7 @@
   function basic() {
     return {
       name: '正面衝突',
-      note: '人類（ノード艦2・ガード級16）とザイレン（ナーム級31・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。',
+      note: '人類（ノード艦2・ガード級16・ミサイル艦2・無人機母艦1）とザイレン（ナーム級31・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。',
       settings: { timeLimit: 3 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 2 * M, sharing: 'comms', retreatBelow: 0.3 },
@@ -187,6 +189,8 @@
         group('guard', 0, 16, 26, 50, 0.6, 'cluster'),
         group('comms', 0, 1, 22, 50, 1, 'cluster'),
         group('picket', 0, 2, 24, 44, 2, 'column'),
+        group('missile', 0, 2, 20, 47, 1.2, 'line'),
+        group('carrier', 0, 1, 18, 53, 1.5, 'line'),
         group('narm', 1, 31, 170, 50, 0.7, 'cluster'),
         group('garmes', 1, 1, 176, 50, 1, 'cluster'),
       ),
@@ -249,8 +253,9 @@
     o = Object.assign({
       w1: 110, w2: 105, fl: 40,           // ザイレン: 第1波・予備・迂回部隊のナーム級
       w2At: 60,                           // ザイレン予備が後方のハブに着く時刻（分）
-      n1: 5, g1: 60, d1: 2,               // 人類主力のノード艦・ガード級・砲撃艦
-      n2: 3, g2: 32, d2: 0, rAt: 45,      // 人類増援のノード艦・ガード級・砲撃艦・到着時刻（分）
+      n1: 5, g1: 60, d1: 2, m1: 4, c1: 2, // 人類主力のノード艦・ガード級・砲撃艦・ミサイル艦・無人機母艦
+      n2: 3, g2: 32, d2: 0, m2: 2, c2: 1, // 人類増援の同じ艦種
+      rAt: 45,                            // 人類増援の到着時刻（分）
     }, o || {});
     const A = [0, 0], B = [40, 230];                 // 人類の主拠点（妨害場 半径2光分）・第2拠点（半径80光秒）
     const H1 = [-60, -40], H2 = [200, 0], H3 = [380, 30], H4 = [320, 200];
@@ -271,12 +276,16 @@
       group('guard', 0, o.g1, M[0] - 2, M[1], 0.5, 'cluster'),
       group('comms', 0, 2, M[0] - 6, M[1], 1.2, 'line'),
       group('artillery', 0, o.d1, M[0] - 9, M[1], 1, 'line'),
+      group('missile', 0, o.m1, M[0] - 12, M[1] - 3, 1.2, 'line'),
+      group('carrier', 0, o.c1, M[0] - 12, M[1] + 4, 1.5, 'line'),
       group('picket', 0, 8, M[0] + 30, M[1] - 20, 8, 'column', { ai: 'static' }),
       // 人類: 本国からの増援。第2拠点を守り、静穏場艦は迂回部隊のレーンの付け根を断つ
       group('node', 0, o.n2, R[0], R[1], 1.5, 'line', reinf),
       group('guard', 0, o.g2, R[0] - 2, R[1], 0.5, 'cluster', reinf),
       group('comms', 0, 1, R[0] - 5, R[1], 1, 'cluster', reinf),
       group('artillery', 0, o.d2, R[0] - 8, R[1], 1, 'line', reinf),
+      group('missile', 0, o.m2, R[0] - 10, R[1] - 3, 1.2, 'line', reinf),
+      group('carrier', 0, o.c2, R[0] - 10, R[1] + 3, 1.5, 'line', reinf),
       withGoal(group('quiet', 0, 2, R[0] + 1, R[1] + 1, 1.2, 'line', reinf), CUT[0], CUT[1]),
       // ザイレン: 第1波（H2）。人類主力の正面へ向かう
       withGoal(group('narm', 1, o.w1, H2[0], H2[1], 0.6, 'cluster'), M[0] + 8, M[1] - 8),
@@ -295,7 +304,7 @@
     types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), { name: '人類第2拠点', abbr: '拠2', hp: 4000, shield: 2500, fieldRadius: 80, cost: 15, known: true });
     return {
       name: '大規模会戦: S星系決戦',
-      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・砲撃艦' + o.d1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・砲撃艦' + o.d2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。拠点と砲撃艦は、近づいてくる敵の群れへ超遠距離からシェルを撃ち込む。数値は仮置き。',
+      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・砲撃艦' + o.d1 : '') + (o.m1 ? '・ミサイル艦' + o.m1 : '') + (o.c1 ? '・無人機母艦' + o.c1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・砲撃艦' + o.d2 : '') + (o.m2 ? '・ミサイル艦' + o.m2 : '') + (o.c2 ? '・無人機母艦' + o.c2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。拠点と砲撃艦は、近づいてくる敵の群れへ超遠距離からシェルを撃ち込む。数値は仮置き。',
       settings: { timeLimit: 6 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
@@ -358,7 +367,7 @@
     };
   }
 
-  // 副兵装の試し撃ち: シェル・誘導弾・無人機・迎撃を一度に見るための小さな戦い（設定にない試作艦を含む）
+  // 副兵装の試し撃ち: シェル・誘導弾・無人機・迎撃を一度に見るための小さな戦い
   function armsDemo() {
     const types = pick(ALL);
     types.base.fieldRadius = 15;

@@ -1,6 +1,6 @@
 {
  "name": "正面衝突",
- "note": "人類（ノード艦2・ガード級16）とザイレン（ナーム級31・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。",
+ "note": "人類（ノード艦2・ガード級16・ミサイル艦2・無人機母艦1）とザイレン（ナーム級31・ガルメス級1）が約2光分離れて向き合う。人類は任意座標にジャンプして飛び込むが、着いたらロックタイムで逃げられない。ザイレンはレーンの先端までは一瞬で来られる。",
  "settings": {
   "dt": 5,
   "timeLimit": 10800,
@@ -456,10 +456,10 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
-   "pdOn": false,
-   "pdRange": 1,
-   "pdChance": 0.3,
-   "pdInterval": 10
+   "pdOn": true,
+   "pdRange": 0.5,
+   "pdChance": 0.1,
+   "pdInterval": 20
   },
   "garmes": {
    "name": "ガルメス級",
@@ -517,10 +517,10 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
-   "pdOn": false,
-   "pdRange": 1,
-   "pdChance": 0.3,
-   "pdInterval": 10
+   "pdOn": true,
+   "pdRange": 1.5,
+   "pdChance": 0.4,
+   "pdInterval": 8
   },
   "elda": {
    "name": "エルダ級",
@@ -645,7 +645,7 @@
    "pdInterval": 10
   },
   "missile": {
-   "name": "ミサイル艦（試作）",
+   "name": "ミサイル艦",
    "abbr": "ミ",
    "shape": "triangle",
    "size": 1.2,
@@ -706,7 +706,7 @@
    "pdInterval": 10
   },
   "carrier": {
-   "name": "無人機母艦（試作）",
+   "name": "無人機母艦",
    "abbr": "母",
    "shape": "square",
    "size": 1.6,
@@ -893,6 +893,24 @@
    "side": 0,
    "x": 25,
    "y": 44
+  },
+  {
+   "type": "missile",
+   "side": 0,
+   "x": 20,
+   "y": 46.4
+  },
+  {
+   "type": "missile",
+   "side": 0,
+   "x": 20,
+   "y": 47.6
+  },
+  {
+   "type": "carrier",
+   "side": 0,
+   "x": 18,
+   "y": 53
   },
   {
    "type": "narm",
