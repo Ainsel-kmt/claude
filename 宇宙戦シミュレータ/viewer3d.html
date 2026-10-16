@@ -60,6 +60,7 @@ body.no-letterbox .hud { top: 14px; }
 body.no-letterbox .top-right { top: 12px; }
 .top-right a { color: var(--ink-2); font-size: 13px; text-decoration: none; padding: 5px 4px; }
 .top-right a:hover { color: var(--ink); }
+.top-right button.off { opacity: .55; text-decoration: line-through; }
 
 .caption { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(9vh + 76px); z-index: 3; text-align: center; pointer-events: none; width: min(900px, 90vw); }
 body.no-letterbox .caption { bottom: 86px; }
@@ -161,7 +162,8 @@ body.no-letterbox .card { bottom: 86px; }
   <button id="scnBtn">シナリオ</button>
   <button id="modelBtn">モデル</button>
   <button id="viewBtn">表示</button>
-  <button id="recBtn" title="いまの画面を動画に録る（R）">録画</button>
+  <button id="sndBtn" title="効果音の入・切（M）">音 入</button>
+  <button id="recBtn" title="いまの画面を動画に録る（R）。効果音が入なら音も録る">録画</button>
   <button id="fsBtn" title="全画面（F）">全画面</button>
   <a href="index.html" id="backLink">2Dの画面へ</a>
 </div>
@@ -248,6 +250,8 @@ body.no-letterbox .card { bottom: 86px; }
     <label class="chk"><input type="checkbox" id="optFilm" checked>フィルムの質感（粒子・周辺減光）</label>
     <div class="range"><span>光のにじみ</span><input type="range" id="optBloom" min="0" max="2" step="0.05" value="1"><output id="optBloomOut">1.00</output></div>
     <div class="range"><span>高さのずれ</span><input type="range" id="optHeight" min="0" max="3" step="0.1" value="1"><output id="optHeightOut">1.0</output></div>
+    <div class="range"><span>効果音の音量</span><input type="range" id="optVolume" min="0" max="1" step="0.05" value="0.6"><output id="optVolumeOut">0.60</output></div>
+    <label class="chk"><input type="checkbox" id="optAmbient" checked>環境音（低いうなり）</label>
     <div class="range" title="計算ではほぼ同じ場所に寄った大群を、水平に広げて見せる"><span>群れの横の散らし</span><input type="range" id="optSpread" min="0" max="3" step="0.1" value="1"><output id="optSpreadOut">1.0</output></div>
     <div class="range"><span>艦の大きさ</span><input type="range" id="optShipScale" min="0.2" max="3" step="0.1" value="1"><output id="optShipScaleOut">1.0</output></div>
     <p>高さは見た目だけのものです。計算は平面で行っているので、距離は2Dの画面と少しだけずれて見えます。艦の大きさは見やすさのために実物（数km）よりはるかに大きくしています。</p>
@@ -266,6 +270,7 @@ body.no-letterbox .card { bottom: 86px; }
 <script src="presets.js"></script>
 <script src="models/models.js" onerror="this.remove()"></script>
 <script src="viewer3d-models.js"></script>
+<script src="viewer3d-audio.js"></script>
 <script src="viewer3d.js"></script>
 </body>
 </html>

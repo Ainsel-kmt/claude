@@ -135,7 +135,7 @@ node tools/battle.js sB --set ... --save scenarios/試し.json                  
 - `engine.js`: 計算エンジン。DOM に依存しないので Node でも動く
 - `presets.js`: 艦種の初期値とプリセットのシナリオ
 - `ui.js`: 地図の描画と操作、編集画面、再生、結果
-- `viewer3d.html`・`viewer3d.js`: 3Dビューア。`viewer3d-models.js`: 艦の既定モデルと GLB への差し替え
+- `viewer3d.html`・`viewer3d.js`: 3Dビューア。`viewer3d-models.js`: 艦の既定モデルと GLB への差し替え。`viewer3d-audio.js`: 効果音（Web Audio で合成）
 - `models/`: 差し替え用の GLB と `models.json`、`tools/pack-models.js` で作る `models.js`
 - `tools/pack-models.js`: `models/` の GLB を `models.js` にまとめる（ファイルを直接開いたビューアでも読めるように）
 - `tools/battle.js`: 戦闘を回して勝率と損害をまとめる。`tools/sweep.js`: 値を振って比べる。`tools/lib.js`: その共通部品。`tools/export-presets.js`: プリセットを `scenarios/` に書き出す

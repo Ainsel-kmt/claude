@@ -23,7 +23,7 @@
     S: null, R: null, src: null,
     vt: 0, playing: false, speed: 60, last: 0, realT: 0,
     cam: 'director', follow: -1, selected: -1,
-    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, ammo: true, nebula: true, film: true, bloom: 1, height: 1, spread: 1, shipScale: 1 },
+    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, ammo: true, sound: true, volume: 0.6, ambient: true, nebula: true, film: true, bloom: 1, height: 1, spread: 1, shipScale: 1 },
   };
 
   // ---------------------------------------------------------------- 起動
@@ -64,6 +64,9 @@
     }
     initTemps();
     V.models = window.ShipModelKit(THREE, { mergeGeometries: A.mergeGeometries, GLTFLoader: A.GLTFLoader, GLTFExporter: A.GLTFExporter });
+    // 効果音（viewer3d-audio.js）。鳴らし始めるのは最初のクリックかキーのあと
+    V.audio = window.SpaceAudio ? window.SpaceAudio() : null;
+    if (V.audio) V.audio.volume = V.opts.volume;
     loading('モデルを読み込んでいます…', 0.1);
     V.modelErrors = await loadModelOverrides();
     initRenderer();
@@ -1195,6 +1198,111 @@
     for (let k = spriteN; k < MAX_SPRITE; k++) fx.sprites[k].visible = false;
   }
 
+  // ---------------------------------------------------------------- 効果音
+
+  // 前のコマから今のコマまでに起きたこと（射撃・撃沈・ジャンプ・シェル・妨害場など）を拾って鳴らす。
+  // 左右は画面での位置、大きさはカメラからの距離（見ている距離に合わせる）で決める。
+  // 早送りでは数が多いので、種類ごとに大きい順に数本だけ鳴らし、数が多いほど少し大きくする。
+  // 巻き戻したときや、時刻を飛ばしたときは鳴らさない
+  const SFX = {
+    beam: { gain: 0.32, max: 2, gap: 0.06 }, drone: { gain: 0.4, max: 1, gap: 0.1 }, intercept: { gain: 0.5, max: 2, gap: 0.08 },
+    death: { gain: 0.75, max: 3, gap: 0.07 }, deathBig: { gain: 1.0, max: 2, gap: 0.15 },
+    shellLaunch: { gain: 0.9, max: 2, gap: 0.12 }, shellBoom: { gain: 1.0, max: 3, gap: 0.1 }, missile: { gain: 0.45, max: 2, gap: 0.1 },
+    jumpIn: { gain: 0.5, max: 2, gap: 0.12 }, jumpOut: { gain: 0.5, max: 2, gap: 0.12 }, lane: { gain: 0.3, max: 2, gap: 0.1 },
+    fieldUp: { gain: 0.7, max: 1, gap: 0.5 }, fieldDown: { gain: 0.6, max: 1, gap: 0.5 },
+  };
+  const sfxLast = {};
+  function sfxSpatial(x, y, z) {
+    const d = camera.position.distanceTo(tmpV.set(x, y, z));
+    tmpV.project(camera);
+    const focus = V.cam === 'free' ? camera.position.distanceTo(controls.target) : cam.dist;
+    let g = clamp(Math.max(8, focus * 0.8) / Math.max(d, 0.1), 0, 1);
+    if (tmpV.z > 1) g *= 0.25;
+    else if (Math.abs(tmpV.x) > 1.2 || Math.abs(tmpV.y) > 1.2) g *= 0.5;
+    return { g, pan: clamp(tmpV.x, -1, 1) * 0.8 };
+  }
+  function updateAudio(dtReal) {
+    const A = V.audio, R = V.R;
+    const prev = V.audioVt, vt = V.vt;
+    V.audioVt = vt;
+    if (!A || !A.ctx || A.ctx.state !== 'running') return;
+    A.ambient(V.opts.sound && V.opts.ambient && V.playing, 0.12);
+    if (!V.opts.sound || !V.playing || prev == null) return;
+    const dv = vt - prev;
+    if (dv <= 0 || dv > Math.max(V.speed * dtReal * 4, 30)) return;
+    const K = E.SHOT_KIND, off = world.off, H = V.opts.height;
+    const q = {};
+    const add = (name, x, y, z, side, size) => {
+      const sp = sfxSpatial(x, y, z);
+      if (sp.g < 0.02) return;
+      const key = name + '|' + (side || 0);
+      const e = q[key] || (q[key] = { name, side: side || 0, n: 0, items: [] });
+      e.n++;
+      if (e.items.length < 64) e.items.push({ g: sp.g, pan: sp.pan, size: size || 1 });
+    };
+    // 射撃（主砲・ライン型・無人機・迎撃）
+    if (R.nShots) {
+      let lo = 0, hi = R.nShots;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (R.shots[mid * SW + 6] <= prev) lo = mid + 1; else hi = mid; }
+      for (let k = lo, c = 0; k < R.nShots && c < 4000; k++, c++) {
+        const o = k * SW;
+        if (R.shots[o + 6] > vt) break;
+        const kind = R.shots[o + 9], side = R.shots[o + 5], tid = R.shots[o + 8];
+        const tx = R.shots[o + 2] + (tid >= 0 ? off[tid * 2] : 0), tz = R.shots[o + 3] + (tid >= 0 ? off[tid * 2 + 1] : 0), ty = tid >= 0 ? R.h[tid] * H : 0;
+        if (kind === K.main || kind === K.line) add('beam', tx, ty, tz, side);
+        else if (kind === K.drone) add('drone', tx, ty, tz, side);
+        else if (kind === K.intercept && R.shots[o + 4] > 0) add('intercept', tx, ty, tz, side);
+      }
+    }
+    // シェル・誘導弾の発射と着弾
+    if (R.nProj) {
+      let lo = 0, hi = R.nProj;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (R.proj[mid * SW + 6] <= prev) lo = mid + 1; else hi = mid; }
+      for (let k = lo; k < R.nProj; k++) {
+        const o = k * SW, t = R.proj[o + 6];
+        if (t - R.maxFlight > vt) break;
+        const kind = R.proj[o + 9], side = R.proj[o + 5], sid = R.proj[o + 7], tid = R.proj[o + 8], t0 = t - R.proj[o + 10];
+        if (t0 > prev && t0 <= vt) add(kind === K.shell ? 'shellLaunch' : 'missile', R.proj[o] + off[sid * 2], R.h[sid] * H, R.proj[o + 1] + off[sid * 2 + 1], side);
+        if (t > prev && t <= vt) {
+          const ty = tid >= 0 ? R.h[tid] * H : 0;
+          if (kind === K.shell) add('shellBoom', R.proj[o + 2], ty, R.proj[o + 3], side, R.proj[o + 4] > 0 ? 1 : 0.6);
+          else if (R.proj[o + 4] > 0) add('death', R.proj[o + 2], ty, R.proj[o + 3], side, 0.8);
+        }
+      }
+    }
+    // 撃沈・ジャンプ・レーン・妨害場
+    const F = R.flashes;
+    let lo = 0, hi = F.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (F[mid].t <= prev) lo = mid + 1; else hi = mid; }
+    for (let k = lo; k < F.length && F[k].t <= vt; k++) {
+      const e = F[k], i = e.i;
+      const x = e.x + (i >= 0 ? off[i * 2] : 0), z = e.y + (i >= 0 ? off[i * 2 + 1] : 0), y = i >= 0 ? R.h[i] * H : 0;
+      const side = i >= 0 && R.S.units[i] ? R.S.units[i].side : 0;
+      if (e.kind === 'death') add(e.big ? 'deathBig' : 'death', x, y, z, side);
+      else if (e.kind === 'arrive') add('jumpIn', x, y, z, side);
+      else if (e.kind === 'depart' || e.kind === 'escape') add('jumpOut', x, y, z, side);
+      else if (e.kind === 'laneDepart') add('lane', x, y, z, side);
+      else if (e.kind === 'fieldUp') add('fieldUp', e.x, 0, e.y, side);
+      else if (e.kind === 'fieldDown') add('fieldDown', e.x, 0, e.y, side);
+    }
+    // 鳴らす
+    const now = performance.now() / 1000;
+    for (const e of Object.values(q)) {
+      const cfg = SFX[e.name];
+      if (!cfg) continue;
+      const key = e.name + '|' + e.side;
+      if (now - (sfxLast[key] || 0) < cfg.gap) continue;
+      e.items.sort((a, b) => b.g - a.g);
+      const boost = Math.min(1.8, 1 + Math.log10(e.n) * 0.4);
+      const n = Math.min(cfg.max, e.items.length);
+      for (let j = 0; j < n; j++) {
+        const it = e.items[j];
+        A.play(e.name, { gain: cfg.gain * it.g * boost * (j ? 0.6 : 1), pan: it.pan, side: e.side, size: it.size, when: A.ctx.currentTime + 0.01 + j * 0.035 });
+      }
+      sfxLast[key] = now;
+    }
+  }
+
   // ---------------------------------------------------------------- カメラ
 
   const cam = { look: null, pos: null, az: 0.8, el: 0.35, dist: 60, plan: null, planT: 0, hot: null, hotT: 0 };
@@ -1590,19 +1698,24 @@
   // ---------------------------------------------------------------- 録画
 
   const rec = { mr: null, chunks: [], canvas: null, ctx: null, t0: 0, type: '' };
-  function recType() {
+  function recType(withAudio) {
     if (!window.MediaRecorder) return '';
-    return ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    const list = (withAudio ? ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus'] : [])
+      .concat(['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']);
+    return list.find((t) => MediaRecorder.isTypeSupported(t)) || '';
   }
   function toggleRec() {
     if (rec.mr) { rec.mr.stop(); return; }
-    const type = recType();
+    // 効果音が鳴っていれば、録画にも入れる
+    const au = V.opts.sound && V.audio && V.audio.ctx && V.audio.recDest ? V.audio.recDest.stream.getAudioTracks()[0] : null;
+    const type = recType(!!au);
     if (!type) { toast('このブラウザは録画に対応していません'); return; }
     const src = renderer.domElement;
     rec.canvas = document.createElement('canvas');
     rec.canvas.width = src.width; rec.canvas.height = src.height;
     rec.ctx = rec.canvas.getContext('2d');
     const stream = rec.canvas.captureStream(60);
+    if (au) stream.addTrack(au);
     rec.chunks = [];
     rec.type = type;
     rec.mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 16e6 });
@@ -1668,6 +1781,7 @@
       const fields = updateFields(fa);
       updateLanes(fa, fields);
       updateEffects(fa);
+      updateAudio(dtReal);
       updateCamera(dtReal);
       updateHud();
       updateLabels();
@@ -1693,6 +1807,10 @@
     $('optBloomOut').textContent = o.bloom.toFixed(2);
     $('optHeightOut').textContent = o.height.toFixed(1);
     $('optSpreadOut').textContent = o.spread.toFixed(1);
+    $('optVolumeOut').textContent = o.volume.toFixed(2);
+    $('sndBtn').textContent = o.sound ? '音 入' : '音 切';
+    $('sndBtn').classList.toggle('off', !o.sound);
+    if (V.audio) { V.audio.setVolume(o.volume); if (!o.sound) V.audio.ambient(false); }
     $('optShipScaleOut').textContent = o.shipScale.toFixed(1);
     world.laneKey = '';
   }
@@ -1769,12 +1887,12 @@
       if (f && V.modelTarget) applyModelFile(V.modelTarget, f);
     });
     // 表示の設定
-    const chk = { optLetterbox: 'letterbox', optCaptions: 'captions', optHud: 'hud', optAutohide: 'autohide', optBeams: 'beams', optFields: 'fields', optLanes: 'lanes', optPlaces: 'places', optUnitLabels: 'unitLabels', optLocks: 'locks', optAmmo: 'ammo', optNebula: 'nebula', optFilm: 'film' };
+    const chk = { optLetterbox: 'letterbox', optCaptions: 'captions', optHud: 'hud', optAutohide: 'autohide', optBeams: 'beams', optFields: 'fields', optLanes: 'lanes', optPlaces: 'places', optUnitLabels: 'unitLabels', optLocks: 'locks', optAmmo: 'ammo', optAmbient: 'ambient', optNebula: 'nebula', optFilm: 'film' };
     for (const [id, k] of Object.entries(chk)) {
       $(id).checked = !!V.opts[k];
       $(id).onchange = (e) => { V.opts[k] = e.target.checked; applyOpts(); saveOpts(); };
     }
-    for (const [id, k] of [['optBloom', 'bloom'], ['optHeight', 'height'], ['optSpread', 'spread'], ['optShipScale', 'shipScale']]) {
+    for (const [id, k] of [['optBloom', 'bloom'], ['optHeight', 'height'], ['optSpread', 'spread'], ['optShipScale', 'shipScale'], ['optVolume', 'volume']]) {
       $(id).value = String(V.opts[k]);
       $(id).oninput = (e) => { V.opts[k] = +e.target.value; applyOpts(); saveOpts(); };
     }
@@ -1805,6 +1923,7 @@
       else if (k === 'f' || k === 'F') $('fsBtn').click();
       else if (k === 'r' || k === 'R') toggleRec();
       else if (k === 'h' || k === 'H') { V.opts.hud = !V.opts.hud; applyOpts(); }
+      else if (k === 'm' || k === 'M') { V.opts.sound = !V.opts.sound; applyOpts(); saveOpts(); }
       else if (k === 'ArrowRight') { V.vt = Math.min(V.R.end, V.vt + Math.max(30, V.speed * 5)); world.spreadCut = true; }
       else if (k === 'ArrowLeft') { V.vt = Math.max(0, V.vt - Math.max(30, V.speed * 5)); world.spreadCut = true; }
       else if (k === 'Escape') { for (const d of document.querySelectorAll('.drawer')) d.classList.remove('open'); }
@@ -1823,6 +1942,10 @@
     }
     document.addEventListener('pointermove', wake);
     document.addEventListener('pointerdown', wake);
+    const wakeAudio = () => { if (V.audio && V.opts.sound) { V.audio.ensure(); V.audio.setVolume(V.opts.volume); } };
+    document.addEventListener('pointerdown', wakeAudio);
+    document.addEventListener('keydown', wakeAudio);
+    $('sndBtn').onclick = () => { V.opts.sound = !V.opts.sound; applyOpts(); saveOpts(); wakeAudio(); };
     wake();
   }
 
