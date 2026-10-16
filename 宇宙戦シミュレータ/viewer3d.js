@@ -23,7 +23,7 @@
     S: null, R: null, src: null,
     vt: 0, playing: false, speed: 60, last: 0, realT: 0,
     cam: 'director', follow: -1, selected: -1,
-    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, nebula: true, film: true, bloom: 1, height: 1, spread: 1, shipScale: 1 },
+    opts: { letterbox: true, captions: true, hud: true, autohide: true, beams: true, fields: true, lanes: true, places: true, unitLabels: false, locks: false, ammo: true, nebula: true, film: true, bloom: 1, height: 1, spread: 1, shipScale: 1 },
   };
 
   // ---------------------------------------------------------------- 起動
@@ -266,7 +266,7 @@
   // ---------------------------------------------------------------- 描画の土台
 
   let renderer, scene, camera, composer, bloomPass, filmPass, controls;
-  const world = { batches: [], fieldMeshes: [], laneGroup: null, laneKey: '', unitState: [] };
+  const world = { batches: [], fieldMeshes: [], laneGroup: null, laneKey: '', unitState: [], spheres: [], tags: [] };
 
   function initRenderer() {
     const stage = $('stage');
@@ -460,6 +460,10 @@
     world.fieldMeshes = [];
     if (world.laneGroup) { scene.remove(world.laneGroup); world.laneGroup.traverse((o) => o.geometry && o.geometry.dispose()); world.laneGroup = null; }
     world.laneKey = '';
+    for (const sp of world.spheres || []) { scene.remove(sp.mesh); sp.mat.dispose(); }
+    if (world.ring) { scene.remove(world.ring); world.ring.geometry.dispose(); world.ring = null; }
+    world.spheres = [];
+    world.tags = [];
     $('labels').innerHTML = '';
   }
 
@@ -534,7 +538,9 @@
     COL = {
       flash: C(3.2, 2.8, 2.2), fire: C(2.6, 1.0, 0.25), smoke: C(0.25, 0.2, 0.18), shock: C(1.2, 1.1, 1.0),
       shield: C(0.6, 1.4, 2.6), spark: C(3, 1.6, 0.5), jumpH: C(1.0, 1.7, 3.2), jumpZ: C(3.2, 1.4, 0.4), field: C(0.4, 2.2, 1.5),
+      gold: C(2.4, 1.9, 1.0),
     };
+    BLAST_HIT = C(1.0, 0.45, 0.14); BLAST_MISS = C(0.3, 0.38, 0.55); RANGE_COL = C(0.35, 0.65, 1.1); AIM_COL = C(1.1, 0.8, 0.3);
   }
 
   // 艦 i の時刻 vt での位置（見えないときは null）
@@ -648,6 +654,21 @@
 
   // ---------------------------------------------------------------- 妨害場とレーン
 
+  // 爆発範囲などの半透明の球: ふちが明るく、中はうっすら色づく
+  function blastMaterial() {
+    return new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(1, 1, 1) }, opacity: { value: 1 } },
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: [
+        'uniform vec3 color; uniform float opacity; varying vec3 vN; varying vec3 vV;',
+        'void main(){',
+        '  float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));',
+        '  float a = (0.06 + pow(f, 3.0) * 0.7) * opacity;',
+        '  gl_FragColor = vec4(color * (0.35 + f * 1.1), a);',
+        '}'].join('\n'),
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    });
+  }
   function fieldMaterial() {
     return new THREE.ShaderMaterial({
       uniforms: { color: { value: new THREE.Color(0.18, 0.82, 0.6) }, time: { value: 0 }, opacity: { value: 1 }, pulse: { value: 0 } },
@@ -758,7 +779,10 @@
   // ---------------------------------------------------------------- 演出: 射線・閃光・爆発
 
   const fx = {};
-  const MAX_BEAM = 9000, MAX_SPRITE = 420, MAX_DEBRIS = 6000, MAX_PROJ = 6000;
+  const MAX_BEAM = 9000, MAX_SPRITE = 420, MAX_DEBRIS = 6000, MAX_PROJ = 6000, MAX_SPHERE = 48, MAX_PIP = 3000;
+  // シェルの弾頭と航跡（白金色）、爆発範囲の球（当たり・外れ）、射程の球、着弾予定点
+  const SHELL_COL = [2.0, 1.6, 0.95];
+  let BLAST_HIT, BLAST_MISS, RANGE_COL, AIM_COL;
   function initEffects() {
     // 射線（光速で伸びる線）
     const bg = new THREE.BufferGeometry();
@@ -786,6 +810,15 @@
     fx.debris.frustumCulled = false;
     fx.debris.renderOrder = 6;
     scene.add(fx.debris);
+    // 残弾の点
+    const ig = new THREE.BufferGeometry();
+    ig.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_PIP * 3), 3));
+    ig.setAttribute('gcolor', new THREE.BufferAttribute(new Float32Array(MAX_PIP * 3), 3));
+    ig.setAttribute('gsize', new THREE.BufferAttribute(new Float32Array(MAX_PIP), 1));
+    fx.pips = new THREE.Points(ig, pointMaterial(true));
+    fx.pips.frustumCulled = false;
+    fx.pips.renderOrder = 7;
+    scene.add(fx.pips);
     // 飛んでいる弾と無人機（点）
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_PROJ * 3), 3));
@@ -886,8 +919,24 @@
       bc[p + 3] = c[0] * a; bc[p + 4] = c[1] * a; bc[p + 5] = c[2] * a;
       nb++;
     };
+    // シェル: 光る弾頭と長い航跡・発射の閃光・着弾で爆発範囲の球と戦果の札（外れは淡い球と「外れ」）
+    // 誘導弾: 弧を描く小さな弾頭。迎撃されると途中で光って消える
+    let nSph = 0, nTag = 0, ringUsed = false;
+    function rangeRing(x, z, r) {
+      if (!world.ring) {
+        const pts = [];
+        for (let k = 0; k <= 160; k++) { const a = k / 160 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a))); }
+        world.ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: RANGE_COL, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+        world.ring.frustumCulled = false;
+        scene.add(world.ring);
+      }
+      world.ring.visible = true; ringUsed = true;
+      world.ring.position.set(x, 0, z);
+      world.ring.scale.setScalar(r);
+    }
     if (V.opts.beams && R.nProj) {
-      const fade = Math.max(1.2, V.speed * 0.22), keep = Math.max(fade, simDur(10, 1.6));
+      const fade = Math.max(1.2, V.speed * 0.22), boom = simDur(30, 3.2), keep = Math.max(fade, boom);
+      const launch = simDur(8, 0.9);
       let lo = 0, hi = R.nProj;
       while (lo < hi) { const mid = (lo + hi) >> 1; if (R.proj[mid * SW + 6] < vt - keep) lo = mid + 1; else hi = mid; }
       for (let k = lo; k < R.nProj; k++) {
@@ -895,39 +944,151 @@
         if (t - R.maxFlight > vt) break;
         const fl = R.proj[o + 10], t0 = t - fl;
         if (t0 > vt) continue;
-        const kind = R.proj[o + 9], hitv = R.proj[o + 4], side = R.proj[o + 5];
+        const kind = R.proj[o + 9], hitv = R.proj[o + 4], side = R.proj[o + 5], killed = R.proj[o + 11];
         const sid = R.proj[o + 7], tid = R.proj[o + 8];
+        const shell = kind === K.shell;
         const sx = R.proj[o] + off[sid * 2], sz = R.proj[o + 1] + off[sid * 2 + 1], sy = R.h[sid] * V.opts.height;
-        const tx = R.proj[o + 2] + off[tid * 2], tz = R.proj[o + 3] + off[tid * 2 + 1], ty = R.h[tid] * V.opts.height;
+        // シェルは狙った点（ずらさない）、誘導弾は標的のそば
+        const tx = R.proj[o + 2] + (shell ? 0 : off[tid * 2]), tz = R.proj[o + 3] + (shell ? 0 : off[tid * 2 + 1]);
+        const ty = tid >= 0 ? R.h[tid] * V.opts.height : 0;
         const c = SCOL[side] || SCOL[0];
         const L = Math.hypot(tx - sx, tz - sz);
         const arc = kind === K.missile ? Math.min(2.5, L * 0.12) : 0;
+        // 発射の閃光
+        if (shell && vt - t0 < launch) {
+          const q = 1 - (vt - t0) / launch;
+          sprite('flare', sx, sy, sz, 0.6 * q + 0.2, COL.gold, q * 0.6);
+          sprite('ring', sx, sy, sz, 0.4 + (1 - q) * 1.4, COL.gold, q * 0.5);
+        }
         if (vt <= t) {
           const p = fl > 0 ? (vt - t0) / fl : 1;
           const x = lerp(sx, tx, p), z = lerp(sz, tz, p), y = lerp(sy, ty, p) + Math.sin(Math.PI * p) * arc;
-          // 尾: 少し前の位置から
-          const q = Math.max(0, p - (kind === K.missile ? 0.06 : 0.03));
-          const bx = lerp(sx, tx, q), bz = lerp(sz, tz, q), by = lerp(sy, ty, q) + Math.sin(Math.PI * q) * arc;
-          trail(bx, by, bz, x, y, z, c, kind === K.missile ? 0.6 : 0.9);
-          head(x, y, z, kind === K.missile ? [1.15, 1.0, 0.85] : c, 1, kind === K.missile ? 0.2 : 0.14);
-        } else {
-          const after = vt - t, q = 1 - after / fade;
-          if (after > keep) continue;
-          if (hitv > 0) {
-            // 爆発（半径 sBlast）。爆発のない弾は火花だけ
-            const br = R.S.units[sid] ? R.S.units[sid].def.sBlast : 0;
-            if (br > 0) {
-              const big = simDur(10, 1.6), qq = 1 - after / big;
-              if (qq > 0) {
-                sprite('flare', tx, ty, tz, br * 2.6 * (0.7 + (1 - qq) * 0.6), COL.flash, qq);
-                sprite('ring', tx, ty, tz, br * 2 * (0.3 + (1 - qq) * 1.2), COL.shock, qq * 0.8);
-              }
-            } else if (q > 0) sprite('spark', tx, ty, tz, 0.5 * q + 0.15, COL.spark, q, hashf(k, 5) * 6);
+          if (shell) {
+            // 航跡: 弾頭から後ろへ最大3光秒
+            const back = L > 0 ? Math.min(p, Math.min(3, L * 0.2) / L) : 0;
+            const q = p - back;
+            trail(lerp(sx, tx, q), lerp(sy, ty, q), lerp(sz, tz, q), x, y, z, SHELL_COL, 1.0);
+            head(x, y, z, SHELL_COL, 1, 0.3);
+            sprite('flare', x, y, z, 0.45, COL.gold, 0.4);
+          } else {
+            const q = Math.max(0, p - 0.06);
+            const bx = lerp(sx, tx, q), bz = lerp(sz, tz, q), by = lerp(sy, ty, q) + Math.sin(Math.PI * q) * arc;
+            trail(bx, by, bz, x, y, z, c, 0.6);
+            head(x, y, z, [1.15, 1.0, 0.85], 1, 0.2);
           }
-          else if (hitv < 0 && q > 0) sprite('flare', tx, ty + arc * 0.2, tz, 0.4 * q + 0.1, COL.flash, q * 0.8);
+          continue;
+        }
+        const after = vt - t;
+        if (after > keep) continue;
+        const br = R.S.units[sid] ? R.S.units[sid].def.sBlast : 0;
+        if (br > 0 && (shell || hitv > 0)) {
+          // 爆発範囲の球（半径 sBlast）。当たれば熱い色、外れなら淡い色
+          const q = after / boom;
+          if (q < 1) {
+            const grow = Math.min(1, q / 0.12), hit = hitv > 0;
+            useSphere(tx, ty, tz, br * (0.25 + 0.75 * grow), hit ? BLAST_HIT : BLAST_MISS, (hit ? 0.95 : 0.45) * (1 - q) * (1 - q));
+            if (hit && q < 0.25) {
+              const qq = 1 - q / 0.25;
+              sprite('flare', tx, ty, tz, br * 1.4 * (0.6 + (1 - qq) * 0.5), COL.flash, qq * 0.6);
+              sprite('ring', tx, ty, tz, br * 2 * (0.5 + (1 - qq) * 0.6), COL.shock, qq * 0.5);
+            }
+            // 戦果の札
+            if (shell || hitv > 0) {
+              const dmg = Math.max(0, hitv - killed);
+              const text = hitv > 0 ? (killed > 0 ? '撃沈 ' + killed : '') + (dmg > 0 ? (killed > 0 ? '・' : '') + '損傷 ' + dmg : '') : '外れ';
+              useTag(tx, ty + br * 1.1, tz, text, hitv > 0, Math.min(1, 2.2 * (1 - q)));
+            }
+          }
+        } else if (hitv > 0) {
+          const q = 1 - after / fade;
+          if (q > 0) sprite('spark', tx, ty, tz, 0.5 * q + 0.15, COL.spark, q, hashf(k, 5) * 6);
+        } else if (hitv < 0) {
+          const q = 1 - after / fade;
+          if (q > 0) sprite('flare', tx, ty + arc * 0.2, tz, 0.4 * q + 0.1, COL.flash, q * 0.8);
         }
       }
     }
+    // 選んだ艦の副兵装: 射程の球と、飛んでいるシェルの着弾点の爆発範囲
+    if (V.selected >= 0 && R.S.units[V.selected]) {
+      const u = R.S.units[V.selected], d = u.def, st = world.unitState[V.selected];
+      if (E.hasSecondary(d) && st && st.vis) {
+        useSphere(st.pos.x, st.pos.y, st.pos.z, d.sRange, RANGE_COL, 0.22);
+        rangeRing(st.pos.x, st.pos.z, d.sRange);
+        if (d.sKind === 'shell' && d.sBlast > 0) {
+          for (let k = 0; k < R.nProj; k++) {
+            const o = k * SW;
+            if (R.proj[o + 7] !== V.selected || R.proj[o + 9] !== K.shell) continue;
+            const t = R.proj[o + 6], t0 = t - R.proj[o + 10];
+            if (vt < t0 || vt > t) continue;
+            useSphere(R.proj[o + 2], R.proj[o + 8] >= 0 ? R.h[R.proj[o + 8]] * V.opts.height : 0, R.proj[o + 3], d.sBlast, AIM_COL, 0.5);
+          }
+        }
+      }
+    }
+    if (!ringUsed && world.ring) world.ring.visible = false;
+    for (let k = nSph; k < world.spheres.length; k++) world.spheres[k].mesh.visible = false;
+    for (let k = nTag; k < world.tags.length; k++) world.tags[k].el.style.display = 'none';
+    function useSphere(x, y, z, r, col, a) {
+      if (a <= 0.005) return;
+      if (nSph >= world.spheres.length) {
+        if (world.spheres.length >= MAX_SPHERE) return;
+        const mat = blastMaterial();
+        const mesh = new THREE.Mesh(unitSphere(), mat);
+        mesh.renderOrder = 4; mesh.frustumCulled = false;
+        scene.add(mesh);
+        world.spheres.push({ mesh, mat });
+      }
+      const sp = world.spheres[nSph++];
+      sp.mesh.visible = true;
+      sp.mesh.position.set(x, y, z);
+      sp.mesh.scale.setScalar(Math.max(0.01, r));
+      sp.mat.uniforms.color.value.copy(col);
+      sp.mat.uniforms.opacity.value = a;
+    }
+    function useTag(x, y, z, text, hit, a) {
+      const p = project(x, y, z);
+      if (!p || !text) return;
+      if (nTag >= world.tags.length) {
+        const el = document.createElement('span');
+        el.className = 'tag';
+        $('labels').appendChild(el);
+        world.tags.push({ el, text: '' });
+      }
+      const tg = world.tags[nTag++];
+      if (tg.text !== text) { tg.el.textContent = text; tg.text = text; }
+      tg.el.classList.toggle('miss', !hit);
+      tg.el.style.display = '';
+      tg.el.style.left = p.x + 'px'; tg.el.style.top = p.y + 'px';
+      tg.el.style.opacity = a.toFixed(2);
+    }
+    // 残弾の点: 弾数の決まった副兵装を持つ艦の上に、残っている弾を明るく、撃った分を暗く並べる
+    let npip = 0;
+    if (V.opts.ammo) {
+      const f0 = R.F[fa.k], pp2 = fx.pips.geometry.attributes.position.array, pc2 = fx.pips.geometry.attributes.gcolor.array, ps2 = fx.pips.geometry.attributes.gsize.array;
+      camera.getWorldDirection(tmpV2);
+      const rx = -tmpV2.z, rz = tmpV2.x, rl = Math.hypot(rx, rz) || 1;
+      for (const b of world.batches) {
+        const d = b.def;
+        if (!(d.sOn && d.sAmmo > 0)) continue;
+        const len = b.model.length * V.opts.shipScale, cap = Math.min(16, Math.floor(d.sAmmo)), gap = Math.max(0.06, len * 0.35);
+        for (const i of b.shown) {
+          const st = world.unitState[i], left = f0.u[i * FW + 10];
+          if (!st || !st.vis || left < 0) continue;
+          for (let k = 0; k < cap && npip < MAX_PIP; k++) {
+            const off2 = (k - (cap - 1) / 2) * gap;
+            pp2[npip * 3] = st.pos.x + rx / rl * off2; pp2[npip * 3 + 1] = st.pos.y + len * 0.9 + 0.08; pp2[npip * 3 + 2] = st.pos.z + rz / rl * off2;
+            const full = k < left, cc = full ? SHELL_COL : [0.25, 0.25, 0.3];
+            pc2[npip * 3] = cc[0]; pc2[npip * 3 + 1] = cc[1]; pc2[npip * 3 + 2] = cc[2];
+            ps2[npip] = full ? 0.07 : 0.05;
+            npip++;
+          }
+        }
+      }
+    }
+    fx.pips.geometry.setDrawRange(0, npip);
+    fx.pips.geometry.attributes.position.needsUpdate = true;
+    fx.pips.geometry.attributes.gcolor.needsUpdate = true;
+    fx.pips.geometry.attributes.gsize.needsUpdate = true;
     // 無人機（記録の区間の前後で同じ番号どうしを結んで動かす）
     const f0 = R.F[fa.k], f1 = R.F[Math.min(fa.k + 1, R.F.length - 1)];
     if (f0.drones) {
@@ -1299,6 +1460,15 @@
     }
   }
 
+  // 艦カードの副兵装の行: 種類・射程・爆発半径・残弾（クリックした艦のまわりに射程の球も出る）
+  function secondaryInfo(d, left) {
+    if (!E.hasSecondary(d)) return '';
+    const kind = { line: 'ライン型', shell: 'シェル', missile: '誘導弾', drone: '無人機' }[d.sKind] || d.sKind;
+    let t = kind + ' 射程' + d.sRange + '光秒';
+    if (d.sBlast > 0 && (d.sKind === 'shell' || d.sKind === 'missile')) t += '・爆発半径' + d.sBlast + '光秒';
+    if (d.sAmmo > 0 && left >= 0) t += '・残弾 ' + left + ' / ' + Math.floor(d.sAmmo);
+    return '<div class="k" style="margin-top:3px">' + esc(t) + '</div>';
+  }
   function updateCard() {
     const i = V.selected, R = V.R, u = R.S.units[i];
     if (!u) return;
@@ -1322,6 +1492,7 @@
       '<div class="k">船体 ' + Math.round(hp * u.def.hp) + ' / ' + u.def.hp + '</div><div class="meter"><div style="width:' + Math.round(hp * 100) + '%;background:' + sideCss(u.side) + '"></div></div>' +
       (u.def.shield > 0 ? '<div class="k">ウォード ' + Math.round(sh * u.def.shield) + ' / ' + u.def.shield + '</div><div class="meter"><div style="width:' + Math.round(sh * 100) + '%;background:#9fd8ff"></div></div>' : '') +
       '<div>' + esc(st.join('・') || '待機') + '</div>' +
+      secondaryInfo(u.def, f0.u[o + 10]) +
       '<div class="row" style="margin-top:6px;display:flex;gap:6px"><button id="cardFollow">この艦を追う</button><button id="cardClose">閉じる</button></div>';
     if (html !== V.lastCard) {
       $('card').innerHTML = html;
@@ -1598,7 +1769,7 @@
       if (f && V.modelTarget) applyModelFile(V.modelTarget, f);
     });
     // 表示の設定
-    const chk = { optLetterbox: 'letterbox', optCaptions: 'captions', optHud: 'hud', optAutohide: 'autohide', optBeams: 'beams', optFields: 'fields', optLanes: 'lanes', optPlaces: 'places', optUnitLabels: 'unitLabels', optLocks: 'locks', optNebula: 'nebula', optFilm: 'film' };
+    const chk = { optLetterbox: 'letterbox', optCaptions: 'captions', optHud: 'hud', optAutohide: 'autohide', optBeams: 'beams', optFields: 'fields', optLanes: 'lanes', optPlaces: 'places', optUnitLabels: 'unitLabels', optLocks: 'locks', optAmmo: 'ammo', optNebula: 'nebula', optFilm: 'film' };
     for (const [id, k] of Object.entries(chk)) {
       $(id).checked = !!V.opts[k];
       $(id).onchange = (e) => { V.opts[k] = e.target.checked; applyOpts(); saveOpts(); };

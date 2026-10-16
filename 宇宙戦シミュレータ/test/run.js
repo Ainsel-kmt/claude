@@ -50,13 +50,16 @@ for (const p of P.SCENARIOS) {
 
 // ---- 設定資料の筋: A は人類勝ち、B はザイレン勝ち
 {
+  // B はもとは設定どおりザイレンの勝ちだったが、ノード艦にシェルを積んでから人類が初手で圧勝するようになった。
+  // ユーザーの判断でその結果を受け入れた（2026-10-16）。ノード艦のシェルを外すと、設定どおりの筋に戻る
   const a = E.runOnce(P.SCENARIOS.find((x) => x.id === 'sA').make(), 1);
-  const b = E.runOnce(P.SCENARIOS.find((x) => x.id === 'sB').make(), 1);
   check('S星系外縁 A は人類の勝ち', a.winner === 0, a.text);
-  check('S星系外縁 B はザイレンの勝ち', b.winner === 1, b.text);
-  const S = E.createSim(P.SCENARIOS.find((x) => x.id === 'sB').make(), {});
+  const noShell = (id) => { const s = P.SCENARIOS.find((x) => x.id === id).make(); s.types.node.sOn = false; return s; };
+  const b = E.runOnce(noShell('sB'), 1);
+  check('ノード艦のシェルを外せば、S星系外縁 B はザイレンの勝ち', b.winner === 1, b.text);
+  const S = E.createSim(noShell('sB'), {});
   E.runToEnd(S);
-  check('B では展開中の静穏場艦が沈む', S.events.some((e) => e.kind === 'fieldFail'));
+  check('（シェルなしの）B では展開中の静穏場艦が沈む', S.events.some((e) => e.kind === 'fieldFail'));
 }
 
 // ---- 集中射撃ではランチェスターの二乗則に近い残り方をする
@@ -230,13 +233,8 @@ for (const p of P.SCENARIOS) {
   const L = one({ a: shooter('line'), b: still });
   check('副兵装（ライン型）は一瞬で当たる', dealt(L, 1) >= 250, dealt(L, 1));
 
-  const sh1 = one({ a: shooter('shell'), b: still });
-  const sh2 = one({ a: shooter('shell'), b: mover });
-  check('シェルは動かない的にはよく当たる', dealt(sh1, 1) >= 250, dealt(sh1, 1));
-  check('シェルは届くまでが長いと、動ける艦にはかわされる', dealt(sh2, 1) < dealt(sh1, 1) * 0.3, [dealt(sh1, 1), dealt(sh2, 1)]);
-
   const ward = Object.assign(clone(still), { shield: 1e5, shieldRegen: 0 });
-  const by = one({ a: shooter('shell', { sBypass: 1 }), b: ward });
+  const by = one({ a: shooter('line', { sBypass: 1 }), b: ward });
   check('素通りの割合が100%なら、ウォードは減らず船体が減る', by.units[1].sh === 1e5 && by.units[1].hp < 1e6, { sh: by.units[1].sh, hp: by.units[1].hp });
 
   const pd = Object.assign(clone(still), { pdOn: true, pdRange: 1, pdChance: 1, pdInterval: 1 });
@@ -256,70 +254,84 @@ for (const p of P.SCENARIOS) {
   check('副兵装のない艦は副兵装を撃たない', E.runOnce(s0, 1).sides[0].arms.fired === 0);
 }
 
-// ---- シェル（魚雷のような運用）: 爆発・弾数・補充・撃つ見込み・雷撃
+// ---- シェル: 超遠距離から敵の群れへ見越しで撃ち込む面制圧。爆発・弾数・補充・間隔
 {
   // jump: free にしておく（speed 0 で jump: none だと拠点扱いになり、自分で補充してしまう）
-  const torp = (extra) => Object.assign(clone(T.generic), {
-    wDamage: 0, ai: 'static', speed: 0, sensor: 100, jump: 'free', lockTime: 0,
-    sOn: true, sKind: 'shell', sDamage: 600, sRange: 5, sInterval: 20, sAccuracy: 1, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 1,
-    sBlast: 0.2, sAmmo: 0, sMinHit: 0, sReturn: false,
+  const gun = (extra) => Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'static', speed: 0, sensor: 200, jump: 'free', lockTime: 0,
+    sOn: true, sKind: 'shell', sDamage: 600, sRange: 60, sInterval: 600, sAccuracy: 1, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 1,
+    sBlast: 1, sAmmo: 0, sMinCount: 1, sReturn: false,
   }, extra || {});
   const still = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, shield: 0 });
   const lost = (S, i) => 1e6 - S.units[i].hp;
+  const cfg = { settings: { timeLimit: 3 * 3600, spacing: 0 } };
 
-  // 爆発: 直撃した艦は威力いっぱい、近くの敵は距離で減る、半径の外と味方は無傷
-  const B = runFor(scn({ a: torp({ sInterval: 10000 }), b: still, f: still }, [
+  // 群れへの面制圧: 半径の中の敵すべてに威力いっぱい（減衰なし）、半径の外と味方は無傷
+  const B = runFor(scn({ a: gun(), b: still, f: still }, [
     { type: 'a', side: 0, x: 0, y: 0 },
-    { type: 'b', side: 1, x: 3, y: 0 },
-    { type: 'b', side: 1, x: 3, y: 0.1 },
-    { type: 'b', side: 1, x: 3, y: 0.3 },
-    { type: 'f', side: 0, x: 3, y: -0.05 },
-  ], { settings: { timeLimit: 3600 } }), 600);
-  const hitIdx = [1, 2].find((i) => lost(B, i) >= 600);
-  check('シェルの直撃は威力いっぱい', hitIdx != null, [lost(B, 1), lost(B, 2)]);
-  const other = hitIdx === 1 ? 2 : 1;
-  check('爆発は半径の中の敵に距離で減る損害', lost(B, other) > 200 && lost(B, other) < 600, lost(B, other));
-  check('爆発は半径の外と味方には届かない', lost(B, 3) === 0 && lost(B, 4) === 0, [lost(B, 3), lost(B, 4)]);
+    { type: 'b', side: 1, x: 40, y: 0 },
+    { type: 'b', side: 1, x: 40, y: 0.5 },
+    { type: 'b', side: 1, x: 40.5, y: -0.6 },
+    { type: 'b', side: 1, x: 40, y: 3 },
+    { type: 'f', side: 0, x: 40, y: -0.2 },
+  ], cfg), 700);
+  check('シェル: 着くまでに時間がかかる（0.05cで40光秒なら約800秒）', B.arms[0].fired >= 1 && lost(B, 1) === 0, { fired: B.arms[0].fired, lost: lost(B, 1) });
+  E.runUntil(B, 1200);
+  check('シェル: 群れの中の敵はどれも威力いっぱい', [1, 2, 3].every((i) => lost(B, i) === 600), [1, 2, 3].map((i) => lost(B, i)));
+  check('シェル: 半径の外と味方は無傷', lost(B, 4) === 0 && lost(B, 5) === 0, [lost(B, 4), lost(B, 5)]);
+
+  // 見越し: まっすぐ進む群れは、着弾の時刻にいる点を狙うので当たる
+  const mover = Object.assign(clone(still), { speed: 0.05, ai: 'assault' });
+  const M = runFor(scn({ a: gun(), b: mover, t: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 40, y: -20, goal: [40, 200] },
+    { type: 't', side: 0, x: 500, y: 500 },
+  ], cfg), 1500);
+  check('シェル: まっすぐ進む敵には見越しで当たる', lost(M, 1) === 600, lost(M, 1));
+
+  // 撃つのに要る敵の数: 群れが小さければ撃たない
+  const C = runFor(scn({ a: gun({ sMinCount: 3 }), b: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 40, y: 0 }, { type: 'b', side: 1, x: 40, y: 0.5 },
+  ], cfg), 1200);
+  check('シェル: 群れが「撃つのに要る敵の数」より小さければ撃たない', C.arms[0].fired === 0, C.arms[0].fired);
 
   // 弾数: 撃ち尽くすと撃てない
-  const A = runFor(scn({ a: torp({ sAmmo: 2 }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 1200);
+  const A = runFor(scn({ a: gun({ sAmmo: 2, sInterval: 60 }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 1200);
   check('弾数2なら2発で撃ち止む', A.arms[0].fired === 2 && A.units[0].ammo === 0, { fired: A.arms[0].fired, ammo: A.units[0].ammo });
 
   // 補充: 味方の拠点の近くにいると、1発ずつ補充されてまた撃つ
   const st = Object.assign(clone(T.base), { wDamage: 0, sOn: false, fieldOn: false, pdOn: false, hp: 1e6 });
-  const R1 = runFor(scn({ a: torp({ sAmmo: 2 }), b: still, st }, [
+  const R1 = runFor(scn({ a: gun({ sAmmo: 2, sInterval: 60 }), b: still, st }, [
     { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }, { type: 'st', side: 0, x: -2, y: 0 },
   ], { settings: { timeLimit: 3600, resupplyTime: 60 } }), 1200);
   check('拠点の近くでは補充されて撃ち続ける', R1.arms[0].fired > 4 && R1.arms[0].resupplied > 0, R1.arms[0]);
 
   // 補充に戻る: 撃ち尽くした艦は拠点へ向かい、満タンで戻る
-  const ret = torp({ sAmmo: 1, sReturn: true, ai: 'assault', speed: 0.05, jump: 'none', sRange: 3 });
+  const ret = gun({ sAmmo: 1, sReturn: true, ai: 'assault', speed: 0.05, jump: 'none', sRange: 3, sSpeed: 0.05 });
   const R2 = runFor(scn({ a: ret, b: still, st }, [
     { type: 'a', side: 0, x: 40, y: 0 }, { type: 'b', side: 1, x: 42, y: 0 }, { type: 'st', side: 0, x: 0, y: 0 },
   ], { settings: { timeLimit: 3 * 3600, resupplyTime: 60 } }), 3600);
   check('撃ち尽くした艦は補充に戻る', R2.events.some((e) => e.kind === 'resupplyGo'), R2.units[0].x);
   check('補充を終えると戦いに戻る', R2.events.some((e) => e.kind === 'resupplyDone'));
 
-  // 撃つ見込み: 届くまでが長くて動ける艦には撃たず、動けない艦には撃つ
-  const mover = Object.assign(clone(still), { speed: 0.05 });
-  const m1 = runFor(scn({ a: torp({ sMinHit: 0.3, sSpeed: 0.02 }), b: mover }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
-  const m2 = runFor(scn({ a: torp({ sMinHit: 0.3, sSpeed: 0.02 }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
+  // 撃つ見込み（誘導弾）: 当たる見込みが足りない敵には撃たない
+  const msl = gun({ sKind: 'missile', sMinHit: 0.3, sRange: 5, sInterval: 20 });
+  const dodgy = Object.assign(clone(still), { evasion: 0.8 });
+  const m1 = runFor(scn({ a: msl, b: dodgy }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
+  const m2 = runFor(scn({ a: msl, b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 3, y: 0 }]), 600);
   check('撃つ見込み: 当たりにくい敵には撃たない', m1.arms[0].fired === 0, m1.arms[0].fired);
-  check('撃つ見込み: 動けない敵には撃つ', m2.arms[0].fired > 0, m2.arms[0].fired);
+  check('撃つ見込み: 当たりやすい敵には撃つ', m2.arms[0].fired > 0, m2.arms[0].fired);
+}
 
-  // 雷撃: 敵が遠いうちは艦隊に付き、10光秒以内に来たら通常航行で切り込む
-  const dd = torp({ ai: 'strike', speed: 0.05, jump: 'free', lockTime: 0, sRange: 0.4, sAmmo: 4 });
-  const fleet = Object.assign(clone(T.generic), { ai: 'static', speed: 0.05, wDamage: 0 });
-  fleet.wDamage = 1;
-  const far = runFor(scn({ a: dd, g: fleet, b: still }, [
-    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'g', side: 0, x: 5, y: 0 }, { type: 'b', side: 1, x: 60, y: 0 },
-  ]), 300);
-  check('雷撃: 敵が遠いうちは艦隊に付く', Math.abs(far.units[0].x - 5) < 3 && !far.units[0].jump, far.units[0].x);
-  const near = runFor(scn({ a: dd, g: fleet, b: still }, [
-    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'g', side: 0, x: 0, y: 1 }, { type: 'b', side: 1, x: 8, y: 0 },
-  ]), 300);
-  // 射程0.4光秒なので、撃てたなら標的の間近まで寄っている。ジャンプは使わない
-  check('雷撃: 近づいた敵には通常航行で切り込んで撃つ', near.arms[0].fired > 0 && !near.events.some((e) => e.kind === 'jump'), { x: near.units[0].x, fired: near.arms[0].fired });
+// ---- 艦どうしの間隔: 重なった艦は押し離される
+{
+  const g = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0.05 });
+  const S = runFor(scn({ g }, [].concat(line('g', 0, 10, 0, 0, 0), [{ type: 'g', side: 1, x: 500, y: 0 }]), { settings: { spacing: 0.3 } }), 120);
+  let minD = Infinity;
+  for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++) minD = Math.min(minD, Math.hypot(S.units[i].x - S.units[j].x, S.units[i].y - S.units[j].y));
+  check('間隔: 同じ点に置いた10隻が0.3光秒近く離れる', minD > 0.25, minD);
+  const S0 = runFor(scn({ g }, [].concat(line('g', 0, 10, 0, 0, 0), [{ type: 'g', side: 1, x: 500, y: 0 }]), { settings: { spacing: 0 } }), 120);
+  check('間隔0なら重なったまま', Math.hypot(S0.units[0].x - S0.units[1].x, S0.units[0].y - S0.units[1].y) < 1e-9);
 }
 
 // ---- 時間切れの判定

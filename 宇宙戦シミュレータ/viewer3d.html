@@ -114,6 +114,8 @@ body.no-letterbox .card { bottom: 86px; }
 .labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
 .labels span { position: absolute; transform: translate(-50%, -100%); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; text-shadow: 0 0 4px #000, 0 0 2px #000; letter-spacing: .04em; }
 .labels span.unit { font-size: 10.5px; color: var(--ink); opacity: .85; }
+.labels span.tag { transform: translate(-50%, -100%); font-size: 15px; font-weight: 600; color: #ffd9a0; letter-spacing: .06em; text-shadow: 0 0 6px #000, 0 0 3px #000, 0 0 12px rgba(255,140,40,.6); }
+.labels span.tag.miss { font-size: 12px; font-weight: 400; color: #b8c6dd; text-shadow: 0 0 4px #000; }
 
 .titlecard { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; transition: opacity 1.2s ease; padding: 0 24px; }
 .titlecard .eyebrow { font-size: 12px; letter-spacing: .5em; color: var(--ink-2); margin-bottom: 14px; }
@@ -240,6 +242,7 @@ body.no-letterbox .card { bottom: 86px; }
     <label class="chk"><input type="checkbox" id="optPlaces" checked>地名</label>
     <label class="chk"><input type="checkbox" id="optUnitLabels">要艦の名前</label>
     <label class="chk"><input type="checkbox" id="optLocks">ロックタイムの輪</label>
+    <label class="chk"><input type="checkbox" id="optAmmo">残弾の点（シェルなど）</label>
     <h3>映像</h3>
     <label class="chk"><input type="checkbox" id="optNebula" checked>星雲</label>
     <label class="chk"><input type="checkbox" id="optFilm" checked>フィルムの質感（粒子・周辺減光）</label>

@@ -61,7 +61,7 @@ node tools/pack-models.js
 | comms | 0.18 | | elda | 0.26 |
 | quiet | 0.24 | | base | 2.0 |
 | picket | 0.11 | | base2 | 1.6 |
-| destroyer | 0.15 | | missile | 0.18 |
+| artillery | 0.2 | | missile | 0.18 |
 | carrier | 0.4 | | | |
 
 ここにない艦種は 0.16 × 表示の大きさ（動かない拠点は 1.5 ×）です。

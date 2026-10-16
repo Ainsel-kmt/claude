@@ -8,12 +8,13 @@
   'use strict';
 
   const H = 3600, M = 60, M_ = 60;
-  // シェル系統（慣性弾）の副兵装の共通値。魚雷のように使う: 直撃でナーム級を一撃で沈め、0.2光秒の爆発で周りの敵も巻き込む。
-  // 弾数に限りがあり（味方の拠点の近くで補充）、当たる見込みが10%以上の敵にだけ撃つ。
+  // シェル系統（慣性弾）の副兵装の共通値。戦闘が始まる前に、超遠距離（60光秒）から敵の群れの進む先を見越して撃ち込む先制の一撃。
+  // 着いた点で爆発し、半径1光秒の中の敵すべてにナーム級を一撃で沈める損害（減衰なし）。撃たれる側は気づかない。
+  // 弾数に限りがあり（味方の拠点の近くで補充）、範囲に3隻以上入る群れにだけ撃つ。
   // ウォードは歪曲への防御なので、実体弾は素通りする想定
   const SHELL = {
-    sOn: true, sKind: 'shell', sDamage: 600, sRange: 3, sInterval: 600, sAccuracy: 0.9, sFalloff: 0, sMounts: 1, sSpeed: 0.02, sBypass: 1,
-    sBlast: 0.2, sAmmo: 4, sMinHit: 0.1, sReturn: false,
+    sOn: true, sKind: 'shell', sDamage: 600, sRange: 60, sInterval: 600, sAccuracy: 0.9, sFalloff: 0, sMounts: 1, sSpeed: 0.05, sBypass: 1,
+    sBlast: 1, sAmmo: 4, sMinCount: 3, sReturn: false,
   };
 
   const TYPES = {
@@ -24,7 +25,7 @@
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
       ai: 'assault', priority: 'nearest', retreatAt: 0,
       linkOn: true, linkRadius: 5, linkCapacity: 12, linkLock: 45 * M, linkBonus: 0.3,
-      ...SHELL, sRange: 3.5,
+      ...SHELL,
       pdOn: true, pdRange: 1.5, pdChance: 0.5, pdInterval: 6,
     },
     guard: {
@@ -65,7 +66,7 @@
       speed: 0, sensor: 120, jump: 'none', lockTime: 0,
       ai: 'static', priority: 'nearest', retreatAt: 0,
       fieldOn: true, fieldRadius: 180, fieldDeploy: 0, fieldDuration: 0, fieldMode: 'immediate',
-      ...SHELL, sDamage: 3000, sRange: 6, sInterval: 300, sMounts: 2, sSpeed: 0.03, sAmmo: 12,
+      ...SHELL, sDamage: 3000, sInterval: 300, sMounts: 2, sAmmo: 12,
       pdOn: true, pdRange: 2, pdChance: 0.5, pdInterval: 5,
     },
     narm: {
@@ -90,15 +91,15 @@
       ai: 'hold', priority: 'nearest', retreatAt: 0,
       layerOn: true, layerSpeed: 60 / (40 * M), layerMax: 300,
     },
-    // シェル系統の特化艦（駆逐艦のような役回り）。主砲はなく、艦隊に付いていき、近づいた敵へ通常航行で切り込んで
-    // 4本を一度に撃つ。撃ち尽くすと味方の拠点へ補充に戻る。名前と数値は仮置き
-    destroyer: {
-      name: 'シェル駆逐艦', abbr: '駆', shape: 'triangle', size: 1, cost: 4, origin: 0,
+    // シェル系統の特化艦（砲撃艦）。主砲はなく、艦隊の後ろに付いていき、超遠距離から敵の群れへシェルを撃ち込む。
+    // 撃ち尽くすと味方の拠点へ補充に戻る。名前と数値は仮置き
+    artillery: {
+      name: '砲撃艦', abbr: '砲', shape: 'triangle', size: 1.1, cost: 4, origin: 0,
       hp: 400, shield: 300, shieldRegen: 0.3, evasion: 0.1,
       wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
-      speed: 0.05, sensor: 40, jump: 'free', lockTime: 3 * H,
-      ai: 'strike', priority: 'nearest', retreatAt: 0,
-      ...SHELL, sRange: 0.4, sInterval: 120, sMounts: 4, sReturn: true,
+      speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
+      ai: 'follow', priority: 'nearest', retreatAt: 0,
+      ...SHELL, sInterval: 300, sMounts: 2, sAmmo: 6, sReturn: true,
     },
     // 設定にない試作の艦種（副兵装の誘導弾・無人機を試すため）。数値は仮置き
     missile: {
@@ -249,8 +250,8 @@
     o = Object.assign({
       w1: 110, w2: 105, fl: 40,           // ザイレン: 第1波・予備・迂回部隊のナーム級
       w2At: 60,                           // ザイレン予備が後方のハブに着く時刻（分）
-      n1: 5, g1: 60, d1: 2,               // 人類主力のノード艦・ガード級・シェル駆逐艦
-      n2: 3, g2: 32, d2: 0, rAt: 45,      // 人類増援のノード艦・ガード級・シェル駆逐艦・到着時刻（分）
+      n1: 5, g1: 60, d1: 2,               // 人類主力のノード艦・ガード級・砲撃艦
+      n2: 3, g2: 32, d2: 0, rAt: 45,      // 人類増援のノード艦・ガード級・砲撃艦・到着時刻（分）
     }, o || {});
     const A = [0, 0], B = [40, 230];                 // 人類の主拠点（妨害場 半径2光分）・第2拠点（半径80光秒）
     const H1 = [-60, -40], H2 = [200, 0], H3 = [380, 30], H4 = [320, 200];
@@ -270,13 +271,13 @@
       group('node', 0, o.n1, M[0], M[1], 1.5, 'line', { ai: 'hold' }),
       group('guard', 0, o.g1, M[0] - 2, M[1], 0.5, 'cluster'),
       group('comms', 0, 2, M[0] - 6, M[1], 1.2, 'line'),
-      group('destroyer', 0, o.d1, M[0] + 2, M[1] + 3, 1, 'line'),
+      group('artillery', 0, o.d1, M[0] - 9, M[1], 1, 'line'),
       group('picket', 0, 8, M[0] + 30, M[1] - 20, 8, 'column', { ai: 'static' }),
       // 人類: 本国からの増援。第2拠点を守り、静穏場艦は迂回部隊のレーンの付け根を断つ
       group('node', 0, o.n2, R[0], R[1], 1.5, 'line', reinf),
       group('guard', 0, o.g2, R[0] - 2, R[1], 0.5, 'cluster', reinf),
       group('comms', 0, 1, R[0] - 5, R[1], 1, 'cluster', reinf),
-      group('destroyer', 0, o.d2, R[0] + 2, R[1] - 3, 1, 'line', reinf),
+      group('artillery', 0, o.d2, R[0] - 8, R[1], 1, 'line', reinf),
       withGoal(group('quiet', 0, 2, R[0] + 1, R[1] + 1, 1.2, 'line', reinf), CUT[0], CUT[1]),
       // ザイレン: 第1波（H2）。人類主力の正面へ向かう
       withGoal(group('narm', 1, o.w1, H2[0], H2[1], 0.6, 'cluster'), M[0] + 8, M[1] - 8),
@@ -295,7 +296,7 @@
     types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), { name: '人類第2拠点', abbr: '拠2', hp: 4000, shield: 2500, fieldRadius: 80, cost: 15, known: true });
     return {
       name: '大規模会戦: S星系決戦',
-      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・シェル駆逐艦' + o.d1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・シェル駆逐艦' + o.d2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲とシェルで応戦し、手の空いた護衛は攻められている拠点の救援に向かう。シェル駆逐艦は敵の間近まで切り込んで撃ち、撃ち尽くすと拠点へ補充に戻る。数値は仮置き。',
+      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・砲撃艦' + o.d1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・砲撃艦' + o.d2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。ノード艦・拠点・砲撃艦は、近づいてくる敵の群れへ超遠距離からシェルを撃ち込む。数値は仮置き。',
       settings: { timeLimit: 6 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
@@ -366,7 +367,7 @@
     Object.assign(types.garmes, { sOn: true, sKind: 'missile', sDamage: 100, sRange: 12, sInterval: 90, sAccuracy: 0.8, sFalloff: 0, sMounts: 3, sSpeed: 0.1, sBypass: 0.5 });
     return {
       name: '副兵装の試し撃ち',
-      note: '副兵装を一度に見るための小さな戦い。人類は拠点とノード艦（シェルと迎撃）・ガード級（迎撃）・シェル駆逐艦に、試作のミサイル艦（誘導弾）と無人機母艦（無人機）を加えた。ザイレンはナーム級75とガルメス級4で、ガルメス級には試しに誘導弾を積んだ。ミサイル艦と母艦は射程を保って撃ち、ナーム級が寄ってくるとガード級の主砲とシェルの間合いになる。',
+      note: '副兵装を一度に見るための小さな戦い。人類は拠点とノード艦（シェルと迎撃）・ガード級（迎撃）・砲撃艦（シェル）に、試作のミサイル艦（誘導弾）と無人機母艦（無人機）を加えた。最初に拠点・ノード艦・砲撃艦が、迫ってくるナーム級の群れへ超遠距離からシェルを撃ち込む。ザイレンはナーム級75とガルメス級4で、ガルメス級には試しに誘導弾を積んだ。ミサイル艦と母艦は射程を保って撃ち、ナーム級が寄ってくるとガード級の主砲とシェルの間合いになる。',
       settings: { timeLimit: 3 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 2 * M, sharing: 'always', retreatBelow: 0.2 },
@@ -378,7 +379,7 @@
         group('node', 0, 1, 14, 0, 1, 'cluster'),
         group('guard', 0, 16, 15, 0, 0.6, 'cluster'),
         group('missile', 0, 4, 10, -3, 1.2, 'line'),
-        group('destroyer', 0, 4, 16, 3, 1, 'line'),
+        group('artillery', 0, 3, 6, 3, 1, 'line'),
         group('carrier', 0, 2, 8, 3, 1.5, 'line'),
         group('narm', 1, 75, 60, 0, 0.6, 'cluster'),
         group('garmes', 1, 4, 64, 0, 1.5, 'line'),

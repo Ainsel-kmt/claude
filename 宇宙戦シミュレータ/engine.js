@@ -15,7 +15,6 @@
     hold: '持ち場防衛（持ち場の近くだけで戦う）',
     escort: '要艦の護衛（近くの要艦に付き添う）',
     follow: '艦隊に随伴（近くの味方の塊に付いていく）',
-    strike: '雷撃（艦隊に付き、近づいた敵に切り込んで撃つ）',
     static: '静止（動かずに撃つ）',
   };
   const PRIORITY = {
@@ -49,7 +48,7 @@
   };
   const S_KIND = {
     line: 'ライン型（光速で一瞬に届く）',
-    shell: 'シェル型（実体弾。遅く、動ける艦にはかわされやすい）',
+    shell: 'シェル型（実体弾。敵の群れの進む先を見越して撃ち込み、着いた点で爆発する）',
     missile: '誘導弾（標的を追う。迎撃で落とされる）',
     drone: '無人機（標的のそばへ飛び、しばらく撃ち続ける。迎撃で落とされる）',
   };
@@ -67,7 +66,7 @@
     commsOn: false, commsResync: 900,
     layerOn: false, layerSpeed: 0.025, layerMax: 300,
     sOn: false, sKind: 'shell', sDamage: 30, sRange: 3, sInterval: 60, sAccuracy: 0.9, sFalloff: 0, sMounts: 1,
-    sSpeed: 0.02, sBypass: 1, sLife: 600, sBlast: 0, sAmmo: 0, sReturn: false, sMinHit: 0,
+    sSpeed: 0.02, sBypass: 1, sLife: 600, sBlast: 0, sAmmo: 0, sReturn: false, sMinHit: 0, sMinCount: 1,
     pdOn: false, pdRange: 1, pdChance: 0.3, pdInterval: 10,
   };
 
@@ -75,7 +74,7 @@
     dt: 5, timeLimit: 4 * 3600, seed: 1,
     jumpTime: 20, jumpMin: 15, arrivalError: 0.1,
     laneAccess: 2, laneJumpTime: 5, laneGap: 3,
-    retarget: 15, drawMargin: 0.05, shellDodge: 5, resupplyRange: 10, resupplyTime: 120,
+    retarget: 15, drawMargin: 0.05, spacing: 0.3, resupplyRange: 10, resupplyTime: 120,
   };
 
   const DEFAULT_SIDES = [
@@ -128,13 +127,14 @@
     { g: '副兵装', k: 'sDamage', label: '威力（1発）', min: 0, on: 'sOn' },
     { g: '副兵装', k: 'sRange', label: '射程', unit: '光秒', step: 0.1, min: 0, on: 'sOn', help: '無人機では、発進させる相手までの距離' },
     { g: '副兵装', k: 'sInterval', label: '発射間隔', unit: '秒', min: 1, on: 'sOn', help: '無人機では発進の間隔' },
-    { g: '副兵装', k: 'sAccuracy', label: '命中率', t: 'pct', on: 'sOn' },
-    { g: '副兵装', k: 'sFalloff', label: '射程端での命中低下', t: 'pct', on: 'sOn', kinds: ['line', 'shell'] },
+    { g: '副兵装', k: 'sAccuracy', label: '命中率', t: 'pct', on: 'sOn', help: 'シェル型では、狙った点に届く割合。外れると狙いから爆発半径の1〜2倍ずれた点で爆発する' },
+    { g: '副兵装', k: 'sFalloff', label: '射程端での命中低下', t: 'pct', on: 'sOn', kinds: ['line'] },
     { g: '副兵装', k: 'sMounts', label: '1回に撃つ数', unit: '発', min: 1, on: 'sOn', help: '別々の敵へ1発ずつ撃ち、敵が少なければ余りは標的に重ねる。無人機では1回に発進させる機数' },
     { g: '副兵装', k: 'sSpeed', label: '弾の速さ', unit: 'c', step: 0.005, min: 0.001, on: 'sOn', kinds: ['shell', 'missile', 'drone'], help: '届くまでの時間 = 距離 ÷ 速さ。0.01c なら1光秒に100秒' },
     { g: '副兵装', k: 'sBypass', label: 'ウォードを素通りする割合', t: 'pct', on: 'sOn', help: 'この割合の損害はウォードに止められず、船体に直接当たる。ウォードは歪曲（ライン系統など）への防御なので、実体弾は素通りする想定' },
-    { g: '副兵装', k: 'sBlast', label: '爆発の半径', unit: '光秒', step: 0.05, min: 0, on: 'sOn', kinds: ['shell', 'missile'], help: '当たると爆発し、この半径の中の敵にも損害を与える（中心で威力いっぱい、縁で0）。0 なら爆発しない' },
-    { g: '副兵装', k: 'sMinHit', label: '撃つ見込み', t: 'pct', on: 'sOn', kinds: ['line', 'shell', 'missile'], help: '当たる見込みがこれ以上の敵にだけ撃つ（弾を無駄にしない）。0% なら射程に入れば撃つ' },
+    { g: '副兵装', k: 'sBlast', label: '爆発の半径', unit: '光秒', step: 0.05, min: 0, on: 'sOn', kinds: ['shell', 'missile'], help: '爆発すると、この半径の中の敵すべてに威力いっぱいの損害を与える（味方は巻き込まない）。シェル型は狙った点で、誘導弾は当たった艦の位置で爆発する。0 なら爆発しない' },
+    { g: '副兵装', k: 'sMinCount', label: '撃つのに要る敵の数', unit: '隻', min: 1, on: 'sOn', kinds: ['shell'], help: '爆発の範囲に入る見込みの敵がこの数以上いる群れにだけ撃つ' },
+    { g: '副兵装', k: 'sMinHit', label: '撃つ見込み', t: 'pct', on: 'sOn', kinds: ['line', 'missile'], help: '当たる見込みがこれ以上の敵にだけ撃つ（弾を無駄にしない）。0% なら射程に入れば撃つ' },
     { g: '副兵装', k: 'sAmmo', label: '弾数', unit: '発', min: 0, on: 'sOn', help: '撃ち尽くすと撃てない。味方の拠点の近くにいると少しずつ補充される。0 なら無制限。無人機では発進させられる機数' },
     { g: '副兵装', k: 'sReturn', label: '弾が尽きたら補充に戻る', t: 'bool', on: 'sOn', help: 'オンなら、撃ち尽くすといちばん近い味方の拠点へ戻り、満タンになってから戦いに戻る' },
     { g: '副兵装', k: 'sLife', label: '無人機の稼働時間', unit: '分', scale: 60, step: 0.5, min: 0, on: 'sOn', kinds: ['drone'], help: '発進してからこの時間で尽きる。標的のそばでは10秒ごとに1発撃つ' },
@@ -156,7 +156,7 @@
     { k: 'drawMargin', label: '時間切れで引き分けにする差', t: 'pct' },
     { k: 'resupplyRange', label: '弾を補充できる距離', unit: '光秒', min: 0, help: '味方の拠点（動かない艦）からこの距離の中にいる艦は、副兵装の弾が少しずつ補充される' },
     { k: 'resupplyTime', label: '1発の補充にかかる時間', unit: '秒', min: 1 },
-    { k: 'shellDodge', label: '実体弾をかわし始める時間', unit: '秒', step: 0.5, min: 0, help: '動ける艦へのシェル型の命中は、届くまでの時間がこの秒数のとき半分、2倍で3分の1…と下がる。動かない艦（拠点・展開中の静穏場艦）は下がらない。0 ならかわさない' },
+    { k: 'spacing', label: '艦どうしの最小間隔', unit: '光秒', step: 0.05, min: 0, help: 'これより近づいた2隻は互いに押し離す（1刻みに動ける距離まで）。0 なら重なってもよい' },
     { k: 'seed', label: '乱数シード', min: 1, help: '命中判定と到着誤差の乱数。複数回試行ではここから順に変える' },
   ];
 
@@ -186,8 +186,10 @@
   const isArmed = (d) => d.wDamage > 0 || hasSecondary(d);
   // 行動の距離: 主砲の射程。主砲がない艦は副兵装の射程
   const engageRange = (d) => (d.wDamage > 0 ? d.wRange : hasSecondary(d) ? d.sRange : d.wRange);
-  // 届く距離: 主砲と副兵装の射程の長いほう
-  const reachOf = (d) => Math.max(d.wDamage > 0 ? d.wRange : 0, hasSecondary(d) ? d.sRange : 0);
+  // 副兵装の射程のうち、目の前の敵に撃つもの（シェル型は超遠距離の面制圧なので含めない）
+  const secReach = (d) => (hasSecondary(d) && d.sKind !== 'shell' ? d.sRange : 0);
+  // 届く距離: 主砲と副兵装（シェル型を除く）の射程の長いほう
+  const reachOf = (d) => Math.max(d.wDamage > 0 ? d.wRange : 0, secReach(d));
   const mountsOf = (d) => Math.max(1, Math.floor(d.wMounts || 1));
   const dpsOf = (d) => (d.wDamage > 0 ? d.wDamage * d.wAccuracy / Math.max(1, d.wInterval) * mountsOf(d) : 0);
 
@@ -306,7 +308,9 @@
       };
       u.cd = S.rng() * d.wInterval;
       // 副兵装の装填（副兵装のない艦では乱数を引かない。これまでのシナリオの結果を変えないため）
-      u.cd2 = hasSecondary(d) ? S.rng() * d.sInterval : 0;
+      // シェル型は最初から撃てる（初手の一斉射）
+      u.cd2 = hasSecondary(d) ? (d.sKind === 'shell' ? 0 : S.rng() * d.sInterval) : 0;
+      u.vx = 0; u.vy = 0; u.ox = u.x; u.oy = u.y; u.scanAt = 0;
       u.pdNext = 0;
       // 副兵装の弾（無制限なら Infinity）と補充の進み
       u.ammo = d.sAmmo > 0 ? Math.floor(d.sAmmo) : Infinity; u.reload = 0; u.resupplying = false;
@@ -672,7 +676,7 @@
   function canSee(S, u, e) {
     if (!visible(e) || e.side === u.side) return false;
     const dd = dist(u, e);
-    if (dd <= Math.max(Math.max(u.def.wRange, hasSecondary(u.def) ? u.def.sRange : 0) * 1.5, 5)) return true;
+    if (dd <= Math.max(Math.max(u.def.wRange, secReach(u.def)) * 1.5, 5)) return true;
     const c = S.contacts[u.side].get(e.id);
     if (!c || c.at > S.t) return false;
     return S.sharing[u.side] || dd <= u.def.sensor;
@@ -757,7 +761,7 @@
     const d = u.def;
     const R = engageRange(d);
     if (u.ai === 'hold') return { a: { x: u.hx, y: u.hy }, r: Math.max(R * 2, 10) + R };
-    if (u.ai === 'static') return { a: u, r: Math.max(d.wRange, hasSecondary(d) ? d.sRange : 0) };
+    if (u.ai === 'static') return { a: u, r: Math.max(d.wRange, secReach(d)) };
     if (u.ai === 'escort') {
       const p = protectee(S, u);
       if (p && !p.jump) return { a: p, r: R * 2 + 3 };
@@ -767,7 +771,7 @@
 
   function pickTarget(S, u) {
     const d = u.def;
-    const local = Math.max(Math.max(d.wRange, hasSecondary(d) ? d.sRange : 0) * 1.5, 5);
+    const local = Math.max(Math.max(d.wRange, secReach(d)) * 1.5, 5);
     const share = S.sharing[u.side];
     const C = S.contacts[u.side];
     const anc = isArmed(d) ? anchorOf(S, u) : null;
@@ -884,9 +888,6 @@
     cruise(S, u, u.x + ux / L * amount, u.y + uy / L * amount);
   }
 
-  // 雷撃の艦が切り込みを始める敵との距離
-  const STRIKE_RANGE = 10;
-
   // 艦隊に付いていく（中心から、いちばん近い敵と反対へ1.5光秒）。付いていく艦隊がなければ false
   function followFleet(S, u) {
     const c = fleetCenter(S, u);
@@ -904,7 +905,7 @@
   // いちばん近い味方の武装艦を見つけ、そのまわり（GROUP_RANGE 以内）の武装艦の中心を返す。
   // 遠くの拠点の守備隊まで平均すると、何もない場所へ向かってしまうため
   function fleetCenter(S, u) {
-    const armed = (p) => p !== u && p.side === u.side && active(p) && isArmed(p.def) && p.ai !== 'follow' && p.ai !== 'strike' && (p.def.speed > 0 || p.def.jump !== 'none');
+    const armed = (p) => p !== u && p.side === u.side && active(p) && isArmed(p.def) && p.ai !== 'follow' && (p.def.speed > 0 || p.def.jump !== 'none');
     const at = (p) => (p.jump ? p.jump : p);
     let near = null, nd = Infinity;
     for (const p of S.units) {
@@ -1094,24 +1095,57 @@
         } else if (dist(u, q) > 1.5) moveTo(S, u, q.x, q.y);
         return;
       }
-      case 'strike': {
-        // 雷撃: 敵が STRIKE_RANGE 以内に来たら、ジャンプを使わず通常航行で射程の85%まで切り込む（弾があるうち）。
-        // それ以外は随伴と同じに艦隊に付く。艦隊がなければ突撃と同じ
-        if (tg && u.ammo > 0 && dist(u, tg) <= STRIKE_RANGE) {
-          if (dist(u, tg) > R * 0.85) {
-            let ux = u.x - tg.x, uy = u.y - tg.y;
-            const L = hyp(ux, uy) || 1;
-            cruise(S, u, tg.x + ux / L * R * 0.85, tg.y + uy / L * R * 0.85);
-          }
-          return;
-        }
-        if (!followFleet(S, u) && tg) approach(S, u, tg, R * 0.85);
-        return;
-      }
       case 'follow': {
         if (!followFleet(S, u) && tg) approach(S, u, tg, R * 0.85);
         return;
       }
+    }
+  }
+
+  // ---------------------------------------------------------------- 艦どうしの間隔
+
+  // S.set.spacing より近い2隻は互いに押し離す。動けない艦（拠点・展開中や維持中の静穏場艦・延伸中のエルダ級）は動かさず、
+  // 相手だけを押す。1刻みに押せるのはその艦が通常航行で進める距離まで（大きな塊は数刻みかけてほどける）
+  function separate(S) {
+    const g = S.set.spacing;
+    if (!(g > 0)) return;
+    const grid = new Map(), list = [];
+    for (const u of S.units) {
+      if (!visible(u)) continue;
+      u.sepX = 0; u.sepY = 0;
+      list.push(u);
+      const k = Math.floor(u.x / g) + ',' + Math.floor(u.y / g);
+      const l = grid.get(k);
+      if (l) l.push(u); else grid.set(k, [u]);
+    }
+    const movable = (u) => u.def.speed > 0 && u.fs !== 1 && u.fs !== 2 && !u.lay;
+    for (const a of list) {
+      const cx = Math.floor(a.x / g), cy = Math.floor(a.y / g);
+      for (let ax = -1; ax <= 1; ax++) for (let ay = -1; ay <= 1; ay++) {
+        const l = grid.get((cx + ax) + ',' + (cy + ay));
+        if (!l) continue;
+        for (const b of l) {
+          if (b.id <= a.id) continue;
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d = hyp(dx, dy);
+          if (d >= g) continue;
+          if (d < 1e-9) {
+            // ぴったり重なっているときは、番号で決まる向きへ（乱数は使わない）
+            const ang = ((a.id * 7919 + b.id * 104729) % 360) * Math.PI / 180;
+            dx = Math.cos(ang); dy = Math.sin(ang);
+          } else { dx /= d; dy /= d; }
+          const ma = movable(a), mb = movable(b), push = g - d;
+          if (ma && mb) { a.sepX -= dx * push / 2; a.sepY -= dy * push / 2; b.sepX += dx * push / 2; b.sepY += dy * push / 2; }
+          else if (ma) { a.sepX -= dx * push; a.sepY -= dy * push; }
+          else if (mb) { b.sepX += dx * push; b.sepY += dy * push; }
+        }
+      }
+    }
+    for (const u of list) {
+      if (!u.sepX && !u.sepY) continue;
+      const L = hyp(u.sepX, u.sepY), cap = u.def.speed * S.set.dt;
+      const k = L > cap ? cap / L : 1;
+      u.x += u.sepX * k; u.y += u.sepY * k;
     }
   }
 
@@ -1128,8 +1162,8 @@
 
   // 射撃の記録（SHOT_W 個ずつ）。kind は SHOT_KIND、flight は届くまでの秒数（記録の時刻は着弾の時刻）
   const SHOT_KIND = { main: 0, line: 1, shell: 2, missile: 3, drone: 4, intercept: 5 };
-  function recordShot(S, sx, sy, tx, ty, hit, side, shooter, target, kind, flight) {
-    if (S.record) S.shots.push(sx, sy, tx, ty, hit, side, S.t, shooter, target, kind, flight);
+  function recordShot(S, sx, sy, tx, ty, hit, side, shooter, target, kind, flight, killed) {
+    if (S.record) S.shots.push(sx, sy, tx, ty, hit, side, S.t, shooter, target, kind, flight, killed || 0);
   }
 
   // 損害を与える。bypass の割合はウォードを素通りして船体に当たる。リンク中の艦は火力が上がる
@@ -1155,17 +1189,8 @@
 
   // ---------------------------------------------------------------- 副兵装と迎撃
 
-  // 流れ弾: シェルが外れたとき、狙った点の STRAY_RANGE 以内にいる別の敵に STRAY_CHANCE で当たることがある
-  const STRAY_RANGE = 0.1, STRAY_CHANCE = 0.5;
   // 無人機: 標的の DRONE_REACH 以内まで寄ると、DRONE_TICK 秒ごとに1発撃つ。標的を失ったら DRONE_SEEK 以内の敵へ移る
   const DRONE_REACH = 0.3, DRONE_TICK = 10, DRONE_SEEK = 3;
-
-  // 動けない艦（拠点・展開中や維持中の静穏場艦）は実体弾をかわせない
-  const cannotDodge = (e) => e.def.speed <= 0 || e.fs === 1 || e.fs === 2;
-  function dodgeFactor(S, e, flight) {
-    if (cannotDodge(e) || !(S.set.shellDodge > 0)) return 1;
-    return 1 / (1 + flight / S.set.shellDodge);
-  }
 
   function nearestWithin(S, u, R, check) {
     let best = null, bd = R;
@@ -1208,8 +1233,7 @@
     const d = u.def, dd = dist(u, e), ev = 1 - e.def.evasion;
     if (d.sKind === 'drone') return 1;
     if (d.sKind === 'missile') return d.sAccuracy * ev;
-    const p = d.sAccuracy * (1 - d.sFalloff * Math.min(1, dd / Math.max(d.sRange, 1e-6))) * ev;
-    return d.sKind === 'line' ? p : p * dodgeFactor(S, e, dd / Math.max(1e-3, d.sSpeed));
+    return d.sAccuracy * (1 - d.sFalloff * Math.min(1, dd / Math.max(d.sRange, 1e-6))) * ev;
   }
   // 副兵装で撃ってよい敵: 射程内で見えていて、当たる見込みが「撃つ見込み」以上
   function secondaryOk(S, u, e) {
@@ -1249,11 +1273,97 @@
     }
   }
 
+  // ---- シェル型: 超遠距離から敵の群れへ見越しで撃ち込む面制圧
+  // 狙う点: 見えている敵それぞれについて、いまの向きと速さのまま進むとして着弾の時刻にいる点を求め、
+  // その敵のまわり（爆発半径の中）にいまいる敵の数（群れはまとまって動く）がいちばん多い点を選ぶ。
+  // 撃たれる側は気づかないので、外れるのは針路や速さを変えたときと、命中率の外れだけ
+  const SHELL_SCAN = 30;       // 撃てる群れが見つからないとき、次に探すまでの秒数
+
+  // 陣営 side の敵（見えている艦）を、一辺 cell のます目に分けたもの。刻みごとに作り直す
+  function foeGrid(S, side, cell) {
+    const key = S.t + '|' + side + '|' + cell;
+    if (S.foeGridKey === key) return S.foeGrid;
+    const g = new Map();
+    for (const e of S.units) {
+      if (e.side === side || !visible(e)) continue;
+      const k = Math.floor(e.x / cell) + ',' + Math.floor(e.y / cell);
+      const l = g.get(k);
+      if (l) l.push(e); else g.set(k, [e]);
+    }
+    S.foeGridKey = key; S.foeGrid = g;
+    return g;
+  }
+
+  // 相対位置 (rx, ry) にいて速さ (vx, vy) で進む相手に、速さ sp の弾が出会うまでの時間（出会えなければ -1）
+  function interceptTime(rx, ry, vx, vy, sp) {
+    const a = vx * vx + vy * vy - sp * sp, b = 2 * (rx * vx + ry * vy), c = rx * rx + ry * ry;
+    if (Math.abs(a) < 1e-12) return b < 0 ? -c / b : -1;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return -1;
+    const q = Math.sqrt(disc), t1 = (-b - q) / (2 * a), t2 = (-b + q) / (2 * a);
+    const lo = Math.min(t1, t2), hi = Math.max(t1, t2);
+    return lo > 0 ? lo : hi > 0 ? hi : -1;
+  }
+
+  function shellPlan(S, u, taken) {
+    const d = u.def, R = Math.max(0.05, d.sBlast), sp = Math.max(1e-3, d.sSpeed), need = Math.max(1, d.sMinCount || 1);
+    const g = foeGrid(S, u.side, R);
+    let best = null;
+    for (const e of S.units) {
+      if (e.side === u.side || !visible(e) || (taken && taken.has(e.id))) continue;
+      if (Math.abs(e.x - u.x) > d.sRange * 1.5 || Math.abs(e.y - u.y) > d.sRange * 1.5) continue;
+      if (!canSee(S, u, e)) continue;
+      // 見越し: いまの向きと速さのまま進む敵と、弾が出会う時刻 t を解く（|r + v t| = 弾速 × t）
+      const t = interceptTime(e.x - u.x, e.y - u.y, e.vx, e.vy, sp);
+      if (!(t > 0)) continue;
+      const px = e.x + e.vx * t, py = e.y + e.vy * t;
+      if (hyp(px - u.x, py - u.y) > d.sRange) continue;
+      // その群れの数: いま e から爆発半径の中にいる敵（すでに別の弾で狙った艦は数えない）
+      let n = 0;
+      const cx = Math.floor(e.x / R), cy = Math.floor(e.y / R);
+      for (let ax = -1; ax <= 1; ax++) for (let ay = -1; ay <= 1; ay++) {
+        const l = g.get((cx + ax) + ',' + (cy + ay));
+        if (!l) continue;
+        for (const f of l) if (!(taken && taken.has(f.id)) && hyp(f.x - e.x, f.y - e.y) <= R) n++;
+      }
+      if (n < need) continue;
+      if (!best || n > best.n || (n === best.n && t < best.t)) best = { x: px, y: py, n, t, e };
+    }
+    return best;
+  }
+
+  // 1回の斉射: 1発目はいちばん大きい群れ、2発目からはまだ狙っていない群れ（なければ同じ点に重ねる）
+  function fireShells(S, u) {
+    const d = u.def, R = Math.max(0.05, d.sBlast), n = Math.max(1, Math.floor(d.sMounts || 1));
+    const taken = new Set();
+    let first = null;
+    for (let i = 0; i < n && u.ammo > 0; i++) {
+      let plan = shellPlan(S, u, taken);
+      if (!plan) plan = first;
+      if (!plan) return false;
+      if (!first) first = plan;
+      for (const e of S.units) if (e.side !== u.side && visible(e) && hyp(e.x - plan.e.x, e.y - plan.e.y) <= R) taken.add(e.id);
+      if (u.ammo !== Infinity) u.ammo--;
+      S.arms[u.side].fired++;
+      S.proj.push({ kind: 'shell', side: u.side, u: u.id, tg: plan.e.id, sx: u.x, sy: u.y, ax: plan.x, ay: plan.y, d: plan.t * Math.max(1e-3, d.sSpeed), t0: S.t, t1: S.t + plan.t });
+    }
+    return !!first;
+  }
+
+  function secondaryShell(S, u) {
+    const d = u.def;
+    if (u.cd2 > 0) u.cd2 -= S.set.dt;
+    if (u.cd2 > 0 || u.ammo <= 0 || S.t < u.scanAt) return;
+    if (fireShells(S, u)) u.cd2 = Math.max(1, d.sInterval);
+    else u.scanAt = S.t + SHELL_SCAN;
+  }
+
   // 撃つ相手が現れてから最初の1発までの照準の時間の上限（間隔の長い兵器が何分も待たないように）
   const AIM_MAX = 30;
 
   function secondary(S, u) {
     const d = u.def, dt = S.set.dt;
+    if (d.sKind === 'shell') { secondaryShell(S, u); return; }
     if (u.ammo <= 0) { u.cd2 = IDLE; return; }
     if (u.cd2 === IDLE) {
       if (!pickSecondary(S, u)) return;
@@ -1273,17 +1383,22 @@
   }
 
   // 爆発: (x, y) から半径 sBlast の中の敵に、中心からの距離に応じて減る損害（直撃した艦は除く）
+  // 爆発: (x, y) から半径 sBlast の中の敵すべてに威力いっぱいの損害（skip の艦は除く。味方は巻き込まない）。
+  // 損害を受けた数と沈んだ数を返す
   function blast(S, src, side, x, y, skip, d) {
     const R = d.sBlast;
+    let hit = 0, killed = 0;
+    if (!(R > 0)) return { hit, killed };
     for (const e of S.units) {
       if (e === skip || e.side === side || !visible(e)) continue;
       const dx = e.x - x, dy = e.y - y;
-      if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
-      const dd = hyp(dx, dy);
-      if (dd > R) continue;
+      if (Math.abs(dx) > R || Math.abs(dy) > R || hyp(dx, dy) > R) continue;
+      hit++;
       S.arms[side].blastHits++;
-      damage(S, src, e, d.sDamage * (1 - dd / R), d.sBypass);
+      damage(S, src, e, d.sDamage, d.sBypass);
+      if (!e.alive) killed++;
     }
+    return { hit, killed };
   }
 
   // 味方の拠点（動かない艦）のうち、いちばん近いもの
@@ -1329,34 +1444,33 @@
       let ax = p.ax, ay = p.ay, hitU = null;
       const live = visible(tg);
       if (live) { ax = tg.x; ay = tg.y; }
-      if (p.kind === 'missile') {
-        if (live && intercept(S, tg.side, ax, ay)) {
-          A.missilesDown++;
-          recordShot(S, p.sx, p.sy, ax, ay, -1, p.side, src.id, tg.id, SHOT_KIND.missile, flight);
-          continue;
+      if (p.kind === 'shell') {
+        // 狙った点で爆発する。命中率の外れは、狙いから爆発半径の1〜2倍ずれた点で爆発
+        let ix = p.ax, iy = p.ay;
+        if (S.rng() >= d.sAccuracy) {
+          const a = S.rng() * Math.PI * 2, r = Math.max(0.05, d.sBlast) * (1 + S.rng());
+          ix += Math.cos(a) * r; iy += Math.sin(a) * r;
         }
-        if (live && S.rng() < d.sAccuracy * (1 - tg.def.evasion)) hitU = tg;
-      } else {
-        if (live && S.rng() < d.sAccuracy * (1 - d.sFalloff * Math.min(1, p.d / Math.max(d.sRange, 1e-6))) * (1 - tg.def.evasion) * dodgeFactor(S, tg, flight)) hitU = tg;
-        if (!hitU) {
-          const cand = [];
-          for (const e of S.units) {
-            if (e === tg || e.side === p.side || !visible(e)) continue;
-            if (Math.abs(e.x - ax) <= STRAY_RANGE && Math.abs(e.y - ay) <= STRAY_RANGE && hyp(e.x - ax, e.y - ay) <= STRAY_RANGE) cand.push(e);
-          }
-          if (cand.length) {
-            const e = cand[Math.floor(S.rng() * cand.length)];
-            if (S.rng() < STRAY_CHANCE * (1 - e.def.evasion) * dodgeFactor(S, e, flight)) hitU = e;
-          }
-        }
+        const res = blast(S, src, p.side, ix, iy, null, d);
+        if (res.hit) A.hits++;
+        recordShot(S, p.sx, p.sy, ix, iy, res.hit, p.side, src.id, p.tg, SHOT_KIND.shell, flight, res.killed);
+        continue;
       }
-      recordShot(S, p.sx, p.sy, ax, ay, hitU ? 1 : 0, p.side, src.id, (hitU || tg).id, p.kind === 'missile' ? SHOT_KIND.missile : SHOT_KIND.shell, flight);
+      if (live && intercept(S, tg.side, ax, ay)) {
+        A.missilesDown++;
+        recordShot(S, p.sx, p.sy, ax, ay, -1, p.side, src.id, tg.id, SHOT_KIND.missile, flight);
+        continue;
+      }
+      if (live && S.rng() < d.sAccuracy * (1 - tg.def.evasion)) hitU = tg;
+      let killed = 0;
       if (hitU) {
         A.hits++;
         const bx = hitU.x, by = hitU.y;
         damage(S, src, hitU, d.sDamage, d.sBypass);
-        if (d.sBlast > 0) blast(S, src, p.side, bx, by, hitU, d);
+        if (!hitU.alive) killed++;
+        if (d.sBlast > 0) killed += blast(S, src, p.side, bx, by, hitU, d).killed;
       }
+      recordShot(S, p.sx, p.sy, ax, ay, hitU ? 1 : 0, p.side, src.id, (hitU || tg).id, SHOT_KIND.missile, flight, killed);
     }
     S.proj = keep;
   }
@@ -1502,9 +1616,10 @@
   const F = { alive: 1, present: 2, escaped: 4, jump: 8, lock: 16, linked: 32, deploy: 64, field: 128, retreat: 256, lay: 512, wait: 1024, laneJump: 2048, resupply: 4096 };
 
   // 射撃の記録: 1発あたり SHOT_W 個の数値
-  //  0-1 撃った位置, 2-3 着いた位置, 4 命中なら1（誘導弾が迎撃されたら -1）, 5 撃った側の陣営, 6 時刻（着弾の時刻）,
-  //  7 撃った艦の番号, 8 標的の番号（迎撃は -1）, 9 種類（SHOT_KIND）, 10 届くまでの秒数（シェル・誘導弾。ほかは 0）
-  const SHOT_W = 11;
+  //  0-1 撃った位置, 2-3 着いた位置, 4 命中なら1（誘導弾が迎撃されたら -1。シェル型は爆発で損害を受けた敵の数）,
+  //  5 撃った側の陣営, 6 時刻（着弾の時刻）, 7 撃った艦の番号, 8 標的の番号（迎撃は -1。シェル型は狙った群れの1隻）,
+  //  9 種類（SHOT_KIND）, 10 届くまでの秒数（シェル・誘導弾。ほかは 0）, 11 爆発で沈んだ敵の数
+  const SHOT_W = 12;
 
   // 無人機の記録: 1機あたり DRONE_W 個の数値: 0 番号, 1-2 位置, 3 陣営, 4 攻撃中なら1, 5 標的の番号
   const DRONE_W = 6;
@@ -1512,8 +1627,9 @@
   // 記録フレーム: 1隻あたり FRAME_W 個の数値
   //  0 x, 1 y（ジャンプ中は出発点）, 2 船体耐久の割合, 3 ウォードの割合, 4 フラグ,
   //  5 ロックタイムの実残り秒（リンクで縮んだ値）, 6-7 ジャンプ先または延伸の目標,
-  //  8 ロックタイムの残り割合, 9 妨害場（展開中は進み 0〜1、展開後は残り秒。無期限は -1）
-  const FRAME_W = 10;
+  //  8 ロックタイムの残り割合, 9 妨害場（展開中は進み 0〜1、展開後は残り秒。無期限は -1）,
+  //  10 副兵装の残弾（弾数の決まりがない、または副兵装がなければ -1）
+  const FRAME_W = 11;
 
   function recordFrame(S) {
     if (S.n % S.recEvery !== 0 && !S.done) { return; }
@@ -1546,6 +1662,7 @@
       if (u.fs === 1) a[o + 9] = u.def.fieldDeploy > 0 ? Math.min(1, u.ft / u.def.fieldDeploy) : 1;
       else if (u.fs === 2) a[o + 9] = u.def.fieldDuration > 0 ? Math.max(0, u.def.fieldDuration - u.ft) : -1;
       else a[o + 9] = 0;
+      a[o + 10] = u.ammo === Infinity ? -1 : u.ammo;
       tg[i] = u.alive ? u.tgt : -1;
     }
     if (S.laneSnapVer !== S.laneVer || !S.laneSnap) {
@@ -1640,7 +1757,11 @@
     updateAttacked(S);
     updateLinks(S);
     sideRetreatCheck(S);
+    for (const u of S.units) { u.ox = u.x; u.oy = u.y; }
     for (const u of S.units) think(S, u);
+    separate(S);
+    // この刻みの速さ（シェルの見越しに使う）
+    for (const u of S.units) { u.vx = (u.x - u.ox) / S.set.dt; u.vy = (u.y - u.oy) / S.set.dt; }
     rebuildLanes(S);
     combat(S);
     updateProjectiles(S);

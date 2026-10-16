@@ -292,7 +292,7 @@
       const o = i * FW;
       return {
         i, side: su.side, def: su.def, x: a[o], y: a[o + 1], hp: a[o + 2], sh: a[o + 3], fl: a[o + 4],
-        lockS: a[o + 5], jx: a[o + 6], jy: a[o + 7], lockF: a[o + 8], fieldV: a[o + 9], tgt: f.tg[i],
+        lockS: a[o + 5], jx: a[o + 6], jy: a[o + 7], lockF: a[o + 8], fieldV: a[o + 9], ammo: a[o + 10], tgt: f.tg[i],
         goal: S.scn.units[i].goal, appear: su.appear,
       };
     });
@@ -535,12 +535,23 @@
         let anyB = false;
         for (let i = 0; i < s.length; i += W) {
           if (s[i + 5] !== side || !(s[i + 4] > 0) || (s[i + 9] !== K.shell && s[i + 9] !== K.missile)) continue;
+          // 当たった爆発（外れたシェルは下で淡い点線の円）
           const su = app.sim.units[s[i + 7]], r = su ? su.def.sBlast : 0;
           if (!(r > 0)) continue;
           const x = sx(s[i + 2]), y = sy(s[i + 3]), rr = Math.max(3, r * app.view.s);
           ctx.moveTo(x + rr, y); ctx.arc(x, y, rr, 0, Math.PI * 2); anyB = true;
         }
         if (anyB) { ctx.fillStyle = rgba(col, 0.18); ctx.fill(); ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 1.2; ctx.stroke(); }
+        ctx.beginPath();
+        let anyM = false;
+        for (let i = 0; i < s.length; i += W) {
+          if (s[i + 5] !== side || s[i + 9] !== K.shell || s[i + 4] > 0) continue;
+          const su = app.sim.units[s[i + 7]], r = su ? su.def.sBlast : 0;
+          if (!(r > 0)) continue;
+          const x = sx(s[i + 2]), y = sy(s[i + 3]), rr = Math.max(3, r * app.view.s);
+          ctx.moveTo(x + rr, y); ctx.arc(x, y, rr, 0, Math.PI * 2); anyM = true;
+        }
+        if (anyM) { ctx.setLineDash([3, 3]); ctx.strokeStyle = rgba(col, 0.45); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
       }
       // 迎撃（落とせたものだけ）
       ctx.beginPath();
@@ -1118,6 +1129,7 @@
     if (fl & FL.retreat) st.push('撤退中');
     if (fl & FL.wait) st.push('ロック明けを待っている');
     if (fl & FL.resupply) st.push('弾の補充に戻っている');
+    if (d.sOn && d.sAmmo > 0 && u.ammo >= 0) st.push('残弾 ' + u.ammo + ' / ' + Math.floor(d.sAmmo));
     if (fl & FL.lock) st.push((d.jump === 'lane' ? '再ジャンプまで' : 'ロックタイム残り') + ' ' + (u.lockS >= 60 ? num(u.lockS / 60, 0) + '分' : num(u.lockS, 0) + '秒'));
     if (fl & FL.linked) st.push(d.linkOn ? 'リンクの中枢' : 'リンク中');
     return st;
@@ -1549,14 +1561,10 @@
         if (d.sKind !== 'line') {
           const fl = d.sRange / Math.max(1e-3, d.sSpeed);
           t += '射程いっぱいまで届くのに' + (fl < 120 ? num(fl, 0) + '秒' : num(fl / 60, 1) + '分') + '。';
-          if (d.sKind === 'shell') {
-            const dg = (scn.settings && scn.settings.shellDodge != null) ? scn.settings.shellDodge : E.DEFAULT_SETTINGS.shellDodge;
-            const f1 = dg > 0 ? 1 / (1 + fl / dg) : 1, f2 = dg > 0 ? 1 / (1 + (fl / 2) / dg) : 1;
-            t += '動ける艦への命中は、射程いっぱいで' + num(f1 * 100, 0) + '%、半分の距離で' + num(f2 * 100, 0) + '%に下がる（動かない艦には下がらない）。';
-          }
+          if (d.sKind === 'shell') t += '敵の群れの進む先を見越して撃ち込み、着いた点で爆発する（撃たれる側は気づかない。針路や速さを変えると外れる）。爆発の範囲に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上入る群れにだけ撃つ。';
         }
         if (d.sBypass > 0) t += '損害の' + num(d.sBypass * 100, 0) + '%はウォードを素通りする。';
-        if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone') t += '当たると半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の爆発。';
+        if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone') t += '爆発の半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の中の敵すべてに威力いっぱい。';
         if (d.sAmmo > 0) {
           const rt = (scn.settings && scn.settings.resupplyTime) || E.DEFAULT_SETTINGS.resupplyTime;
           t += '弾は' + Math.floor(d.sAmmo) + '発（拠点の近くで1発' + num(rt / 60, 1) + '分ずつ補充' + (d.sReturn ? '。尽きたら補充に戻る' : '') + '）。';

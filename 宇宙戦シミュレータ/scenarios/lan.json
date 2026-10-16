@@ -13,7 +13,7 @@
   "laneGap": 3,
   "retarget": 15,
   "drawMargin": 0.05,
-  "shellDodge": 5,
+  "spacing": 0.3,
   "resupplyRange": 10,
   "resupplyTime": 120
  },
@@ -89,6 +89,7 @@
    "sAmmo": 0,
    "sReturn": false,
    "sMinHit": 0,
+   "sMinCount": 1,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
