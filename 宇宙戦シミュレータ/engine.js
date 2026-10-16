@@ -137,9 +137,9 @@
     { g: '副兵装', k: 'sSpeed', label: '弾の速さ', unit: 'c', step: 0.005, min: 0.001, on: 'sOn', kinds: ['shell', 'missile', 'drone'], help: '届くまでの時間 = 距離 ÷ 速さ。0.01c なら1光秒に100秒' },
     { g: '副兵装', k: 'sBypass', label: 'ウォードを素通りする割合', t: 'pct', on: 'sOn', help: 'この割合の損害はウォードに止められず、船体に直接当たる。ウォードは歪曲（ライン系統など）への防御なので、実体弾は素通りする想定' },
     { g: '副兵装', k: 'sBlast', label: '爆発の半径', unit: '光秒', step: 0.05, min: 0, on: 'sOn', kinds: ['shell', 'missile'], help: '爆発すると、この半径の中の敵すべてに威力いっぱいの損害を与える（味方は巻き込まない）。シェル型は狙った点で、誘導弾は当たった艦の位置で爆発する。0 なら爆発しない' },
-    { g: '副兵装', k: 'sMinCount', label: '撃つのに要る敵の数', unit: '隻', min: 1, on: 'sOn', kinds: ['shell', 'lance'], help: 'シェル型は、爆発の範囲に入る見込みの敵がこの数以上いる群れにだけ撃つ。貫く線は、線の上にこの数以上の敵が並ぶ向きにだけ撃つ' },
-    { g: '副兵装', k: 'sCharge', label: '溜めの時間', unit: '分', scale: 60, step: 0.5, min: 0, on: 'sOn', kinds: ['lance'], help: '撃つ相手が見つかると溜めに入り、この時間のあとで撃つ。溜めている間は動けない。溜め終わって撃つ相手がいなければ、溜めたまま待つ（そのあいだは動ける）' },
-    { g: '副兵装', k: 'sWidth', label: '線の太さ', unit: '光秒', step: 0.05, min: 0.01, on: 'sOn', kinds: ['lance'], help: '撃った瞬間に、射程いっぱいまで伸びる線の、この太さの中にいる敵すべてに損害を与える（味方は巻き込まない）。向きは線の上に敵がいちばん多く並ぶ向きを選ぶ' },
+    { g: '副兵装', k: 'sMinCount', label: '撃つのに要る敵の数', unit: '隻', min: 1, on: 'sOn', kinds: ['shell'], help: '爆発の範囲に入る見込みの敵がこの数以上いる群れにだけ撃つ' },
+    { g: '副兵装', k: 'sCharge', label: '溜めの時間', unit: '分', scale: 60, step: 0.5, min: 0, on: 'sOn', kinds: ['lance'], help: '射程の中に見えている敵がいると溜めに入り、この時間のあとで撃つ。溜めている間は動けない。溜め終わって射程の中に敵がいなければ、溜めたまま待つ（そのあいだは動ける）' },
+    { g: '副兵装', k: 'sWidth', label: '線の太さ', unit: '光秒', step: 0.05, min: 0.01, on: 'sOn', kinds: ['lance'], help: '撃った瞬間に、射程いっぱいまで伸びる線の、この太さの中にいる敵すべてに損害を与える（味方は巻き込まない）。向きは、線の上の敵のコストの合計（コスト × 数）がいちばん大きい向きを選ぶ' },
     { g: '副兵装', k: 'sMinHit', label: '撃つ見込み', t: 'pct', on: 'sOn', kinds: ['line', 'missile'], help: '当たる見込みがこれ以上の敵にだけ撃つ（弾を無駄にしない）。0% なら射程に入れば撃つ' },
     { g: '副兵装', k: 'sAmmo', label: '弾数', unit: '発', min: 0, on: 'sOn', help: '撃ち尽くすと撃てない。味方の拠点の近くにいると少しずつ補充される。0 なら無制限。無人機では発進させられる機数' },
     { g: '副兵装', k: 'sReturn', label: '弾が尽きたら補充に戻る', t: 'bool', on: 'sOn', help: 'オンなら、撃ち尽くすといちばん近い味方の拠点へ戻り、満タンになってから戦いに戻る' },
@@ -896,7 +896,8 @@
   function anchorOf(S, u) {
     const d = u.def;
     const R = engageRange(d);
-    if (u.ai === 'hold') return { a: { x: u.hx, y: u.hy }, r: Math.max(R * 2, 10) + R };
+    // 持ち場防衛: 持ち場から主砲の射程の2倍（最低10光秒）＋射程まで。貫く線を持つ艦は、貫く線の射程まで
+    if (u.ai === 'hold') return { a: { x: u.hx, y: u.hy }, r: Math.max(Math.max(R * 2, 10) + R, hasSecondary(d) && d.sKind === 'lance' ? d.sRange : 0) };
     if (u.ai === 'static') return { a: u, r: Math.max(d.wRange, secReach(d)) };
     if (u.ai === 'escort') {
       const p = protectee(S, u);
@@ -1194,9 +1195,10 @@
         return;
       }
       case 'hold': {
+        // 持ち場から leash までは標的へ寄る。標的にできる範囲（貫く線を持つ艦は貫く線の射程まで）は anchorOf と同じ
         const home = { x: u.hx, y: u.hy };
-        const leash = Math.max(R * 2, 10);
-        if (tg && dist(home, tg) <= leash + R && dist(u, tg) > R * 0.85) {
+        const leash = Math.max(R * 2, 10), reach = anchorOf(S, u).r;
+        if (tg && dist(home, tg) <= reach && dist(u, tg) > R * 0.85) {
           let ux = u.x - tg.x, uy = u.y - tg.y;
           const L = hyp(ux, uy) || 1;
           let px = tg.x + ux / L * R * 0.85, py = tg.y + uy / L * R * 0.85;
@@ -1503,11 +1505,12 @@
   }
 
   // ---- 貫く線: 溜めてから、射程いっぱいまで伸びる線の上に並ぶ敵すべてを一度に撃つ
-  // 向き: 射程内で見えている敵それぞれへ向けた線のうち、線の太さの中に入る敵がいちばん多いもの
+  // 向き: 射程内で見えている敵それぞれへ向けた線のうち、線の太さの中に入る敵のコストの合計（コスト × 数）がいちばん大きいもの。
+  // 射程内に見えている敵が1隻でもいれば撃つ（並ぶのを待たない）
   const LANCE_SCAN = 30;      // 撃つ向きが見つからないとき、次に探すまでの秒数
 
   function lancePlan(S, u, taken) {
-    const d = u.def, R = d.sRange, W = Math.max(0.01, d.sWidth) / 2, need = Math.max(1, d.sMinCount || 1);
+    const d = u.def, R = d.sRange, W = Math.max(0.01, d.sWidth) / 2;
     const list = [];
     for (const e of S.units) {
       if (e.side === u.side || !visible(e) || (taken && taken.has(e.id))) continue;
@@ -1520,15 +1523,15 @@
     let best = null;
     for (const a of list) {
       const ux = a.dx / a.dd, uy = a.dy / a.dd;
-      let n = 0;
+      let n = 0, v = 0;
       for (const b of list) {
         const along = b.dx * ux + b.dy * uy;
         if (along < 0 || along > R) continue;
-        if (Math.abs(b.dx * uy - b.dy * ux) <= W) n++;
+        if (Math.abs(b.dx * uy - b.dy * ux) <= W) { n++; v += b.e.def.cost; }
       }
-      if (!best || n > best.n || (n === best.n && a.dd < best.dd)) best = { ux, uy, n, dd: a.dd, e: a.e };
+      if (!best || v > best.v || (v === best.v && a.dd < best.dd)) best = { ux, uy, n, v, dd: a.dd, e: a.e };
     }
-    return best && best.n >= need ? best : null;
+    return best;
   }
 
   // 線の上（太さの中）にいる敵すべてに損害。命中率は1隻ずつ（回避で下がる）。損害を受けた数と沈んだ数を返す

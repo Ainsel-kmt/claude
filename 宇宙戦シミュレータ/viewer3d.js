@@ -1784,7 +1784,7 @@
         const c = R.charges.find((x) => x.i === i && V.vt >= x.t0 && V.vt < x.t1);
         st.push('貫く線を溜めている' + (c ? '（' + Math.round(clamp((V.vt - c.t0) / Math.max(1, u.def.sCharge), 0, 1) * 100) + '%）' : ''));
       }
-      if (fl & FL.charged) st.push('溜め終わり、撃つ向きを待っている');
+      if (fl & FL.charged) st.push('溜め終わり、射程に敵が入るのを待っている');
       if (fl & FL.hub) st.push('後ろにレーンを敷いている');
       if (u.def.hangarOn) {
         let n = 0;

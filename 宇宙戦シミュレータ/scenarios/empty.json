@@ -917,7 +917,7 @@
    "sAmmo": 0,
    "sReturn": false,
    "sMinHit": 0,
-   "sMinCount": 3,
+   "sMinCount": 1,
    "sCharge": 300,
    "sWidth": 0.3,
    "pdOn": true,

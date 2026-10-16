@@ -1160,7 +1160,7 @@
     if (fl & FL.wait) st.push('ロック明けを待っている');
     if (fl & FL.resupply) st.push('弾の補充に戻っている');
     if (fl & FL.charge) st.push('貫く線を溜めている（動けない）');
-    if (fl & FL.charged) st.push('貫く線を溜め終わり、撃つ向きを待っている');
+    if (fl & FL.charged) st.push('貫く線を溜め終わり、射程に敵が入るのを待っている');
     if (fl & FL.hub) st.push('後ろにレーンを敷きながら進んでいる');
     if (u.cargo > 0) st.push('積んでいる艦 ' + u.cargo + '隻');
     if (d.sOn && d.sAmmo > 0 && u.ammo >= 0) st.push('残弾 ' + u.ammo + ' / ' + Math.floor(d.sAmmo));
@@ -1619,7 +1619,7 @@
         const n = Math.max(1, Math.floor(d.sMounts || 1));
         let t = '目安: ' + num(d.sInterval / 60, 1) + '分ごとに' + n + (d.sKind === 'drone' ? '機を発進' : '発') + '。';
         if (d.sKind === 'lance') {
-          t = '目安: ' + num(d.sCharge / 60, 1) + '分溜めて撃ち、撃ってから' + num(d.sInterval / 60, 1) + '分で次の溜めに入れる。射程' + num(d.sRange, 0) + '光秒（約' + fmtKm(d.sRange) + '）いっぱいまで伸びる太さ' + num(d.sWidth, 2) + '光秒の線の上にいる敵すべてに損害（味方は巻き込まない）。線の上に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上並ぶ向きにだけ撃つ。溜めている間は動けない。';
+          t = '目安: ' + num(d.sCharge / 60, 1) + '分溜めて撃ち、撃ってから' + num(d.sInterval / 60, 1) + '分で次の溜めに入れる。射程' + num(d.sRange, 0) + '光秒（約' + fmtKm(d.sRange) + '）いっぱいまで伸びる太さ' + num(d.sWidth, 2) + '光秒の線の上にいる敵すべてに損害（味方は巻き込まない）。線の上の敵のコストの合計がいちばん大きい向きへ撃つ。溜めている間は動けない。';
         } else if (d.sKind !== 'line') {
           const fl = d.sRange / Math.max(1e-3, d.sSpeed);
           t += '射程いっぱいまで届くのに' + (fl < 120 ? num(fl, 0) + '秒' : num(fl / 60, 1) + '分') + '。';

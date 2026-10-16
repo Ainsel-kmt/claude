@@ -336,7 +336,7 @@ for (const p of P.SCENARIOS) {
   const lance = (extra) => Object.assign(clone(T.generic), {
     wDamage: 0, ai: 'static', speed: 0.05, sensor: 200, jump: 'none',
     sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
-    sAmmo: 0, sMinCount: 3, sCharge: 600, sWidth: 0.3,
+    sAmmo: 0, sCharge: 600, sWidth: 0.3,
   }, extra || {});
   const still = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, shield: 0 });
   const warded = Object.assign(clone(still), { hp: 1e6, shield: 1500 });
@@ -365,11 +365,27 @@ for (const p of P.SCENARIOS) {
   ], cfg), 400);
   check('貫く線: 溜めている間は動けない', R.units[0].charge > 0 && Math.hypot(R.units[0].x, R.units[0].y) < 1e-9, { x: R.units[0].x, charge: R.units[0].charge });
 
-  // 線の上に並ぶ数が足りなければ溜めに入らない
-  const N = runFor(scn({ a: lance(), b: still }, [
-    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 20, y: 0 }, { type: 'b', side: 1, x: 20, y: 5 }, { type: 'b', side: 1, x: 20, y: -5 },
-  ], cfg), 1200);
-  check('貫く線: 並ぶ数が「撃つのに要る敵の数」に届かなければ撃たない', N.arms[0].fired === 0 && !(N.units[0].charge > 0), { fired: N.arms[0].fired, charge: N.units[0].charge });
+  // 向き: 線の上の敵のコストの合計がいちばん大きい向き（安い2隻の列より、高い1隻）
+  const rich = Object.assign(clone(still), { cost: 5 });
+  const V = runFor(scn({ a: lance(), b: still, r: rich }, [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 20, y: 0 }, { type: 'b', side: 1, x: 24, y: 0 },
+    { type: 'r', side: 1, x: 0, y: 20 },
+  ], cfg), 700);
+  check('貫く線: コストの合計が大きい向きへ撃つ（安い2隻の列より高い1隻）', V.arms[0].fired === 1 && lost(V, 3) === 2000 && lost(V, 1) === 0 && lost(V, 2) === 0, [lost(V, 1), lost(V, 2), lost(V, 3)]);
+  // 敵が1隻でも、射程の中にいれば撃つ
+  const N = runFor(scn({ a: lance(), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 25, y: 7 }], cfg), 700);
+  check('貫く線: 敵が1隻でも撃つ', N.arms[0].fired === 1 && lost(N, 1) === 2000, { fired: N.arms[0].fired, lost: lost(N, 1) });
+  // 射程の外なら溜めない
+  const O = runFor(scn({ a: lance(), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 35, y: 0 }], cfg), 700);
+  check('貫く線: 射程の外の敵には溜めない', O.arms[0].fired === 0 && !(O.units[0].charge > 0), { fired: O.arms[0].fired, charge: O.units[0].charge });
+
+  // 持ち場防衛: 貫く線を持つ艦は、持ち場から貫く線の射程までの敵を標的にする（主砲だけなら14.5光秒まで）
+  const holder = (extra) => lance(Object.assign({ ai: 'hold', wDamage: 10, wRange: 4.5, sCharge: 0, sInterval: 100000 }, extra));
+  const Hd = runFor(scn({ a: holder(), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 20, y: 0 }], cfg), 300);
+  check('持ち場防衛: 貫く線を持つ艦は射程（30光秒）までの敵を狙って、持ち場から10光秒まで寄る', Hd.units[0].tgt === 1 && Hd.units[0].x > 5 && Hd.units[0].x <= 10.01, { tgt: Hd.units[0].tgt, x: Hd.units[0].x });
+  const H0 = runFor(scn({ a: holder({ sOn: false }), b: still }, [{ type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 20, y: 0 }], cfg), 300);
+  check('持ち場防衛: 主砲だけの艦は14.5光秒より遠い敵を狙わない', H0.units[0].tgt === -1 && H0.units[0].x === 0, { tgt: H0.units[0].tgt, x: H0.units[0].x });
 }
 
 // ---- 旗艦: 方舟（積んで運び、敵を見つけたら出す。沈むと積荷も沈む）

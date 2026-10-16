@@ -132,7 +132,7 @@
       ai: 'hold', priority: 'nearest', retreatAt: 0,
       pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
       sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
-      sAmmo: 0, sMinCount: 3, sCharge: 5 * M, sWidth: 0.3,
+      sAmmo: 0, sCharge: 5 * M, sWidth: 0.3,
       hubOn: true, hubSpeed: 60 / (40 * M),
       hangarOn: true, hangarCap: 40, hangarInterval: 30, hangarBatch: 2,
     },
