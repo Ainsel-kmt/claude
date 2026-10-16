@@ -25,7 +25,6 @@
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
       ai: 'assault', priority: 'nearest', retreatAt: 0,
       linkOn: true, linkRadius: 5, linkCapacity: 12, linkLock: 45 * M, linkBonus: 0.3,
-      ...SHELL,
       pdOn: true, pdRange: 1.5, pdChance: 0.5, pdInterval: 6,
     },
     guard: {
@@ -39,7 +38,7 @@
     comms: {
       name: '通信艦', abbr: 'C', shape: 'square', size: 1.1, cost: 4, origin: 0,
       hp: 300, shield: 300, shieldRegen: 0.3, evasion: 0,
-      wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
+      wDamage: 5, wRange: 2, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2,
       speed: 0.05, sensor: 60, jump: 'free', lockTime: 3 * H,
       ai: 'follow', priority: 'nearest', retreatAt: 0,
       commsOn: true, commsResync: 15 * M,
@@ -47,7 +46,7 @@
     quiet: {
       name: '静穏場艦', abbr: 'Q', shape: 'hexagon', size: 1.3, cost: 6, origin: 0,
       hp: 600, shield: 2500, shieldRegen: 2, evasion: 0,
-      wDamage: 0, wRange: 0, wInterval: 30, wAccuracy: 0, wFalloff: 0,
+      wDamage: 5, wRange: 2, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2,
       speed: 0.05, sensor: 30, jump: 'free', lockTime: 3 * H,
       ai: 'follow', priority: 'nearest', retreatAt: 0,
       fieldOn: true, fieldRadius: 78, fieldDeploy: 15 * M, fieldDuration: 3 * H, fieldMode: 'arrive',
@@ -79,7 +78,7 @@
     garmes: {
       name: 'ガルメス級', abbr: 'ガ', shape: 'square', size: 1.6, cost: 8, origin: 1,
       hp: 2500, shield: 500, shieldRegen: 0.5, evasion: 0.05,
-      wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2,
+      wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 4,
       speed: 0.04, sensor: 200, jump: 'lane', lockTime: 60,
       ai: 'assault', priority: 'nearest', retreatAt: 0,
     },
@@ -296,7 +295,7 @@
     types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), { name: '人類第2拠点', abbr: '拠2', hp: 4000, shield: 2500, fieldRadius: 80, cost: 15, known: true });
     return {
       name: '大規模会戦: S星系決戦',
-      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・砲撃艦' + o.d1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・砲撃艦' + o.d2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。ノード艦・拠点・砲撃艦は、近づいてくる敵の群れへ超遠距離からシェルを撃ち込む。数値は仮置き。',
+      note: '第7段階と第8段階をひとつにした想定（約400隻）。ザイレンはH2の第1波（ナーム級' + o.w1 + '）で人類主力を押し、予備（ナーム級' + o.w2 + '）がT+' + o.w2At + '分に後方のハブH3へ着いて続く。H4の迂回部隊（ナーム級' + o.fl + '）は、エルダ級が延ばすレーンで第2拠点に迫る。人類は主力（ノード艦' + o.n1 + '・ガード級' + o.g1 + (o.d1 ? '・砲撃艦' + o.d1 : '') + '）が待機位置で迎え撃ち、本国からの増援（ノード艦' + o.n2 + '・ガード級' + o.g2 + (o.d2 ? '・砲撃艦' + o.d2 : '') + '・静穏場艦2）がT+' + o.rAt + '分に第2拠点の近くへ着く。増援の静穏場艦は迂回部隊のレーンの付け根を妨害場で断つ。拠点の位置は互いに知っている。拠点は6門の砲で応戦し、手の空いた護衛は攻められている拠点の救援に向かう。拠点と砲撃艦は、近づいてくる敵の群れへ超遠距離からシェルを撃ち込む。数値は仮置き。',
       settings: { timeLimit: 6 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
@@ -367,7 +366,7 @@
     Object.assign(types.garmes, { sOn: true, sKind: 'missile', sDamage: 100, sRange: 12, sInterval: 90, sAccuracy: 0.8, sFalloff: 0, sMounts: 3, sSpeed: 0.1, sBypass: 0.5 });
     return {
       name: '副兵装の試し撃ち',
-      note: '副兵装を一度に見るための小さな戦い。人類は拠点とノード艦（シェルと迎撃）・ガード級（迎撃）・砲撃艦（シェル）に、試作のミサイル艦（誘導弾）と無人機母艦（無人機）を加えた。最初に拠点・ノード艦・砲撃艦が、迫ってくるナーム級の群れへ超遠距離からシェルを撃ち込む。ザイレンはナーム級75とガルメス級4で、ガルメス級には試しに誘導弾を積んだ。ミサイル艦と母艦は射程を保って撃ち、ナーム級が寄ってくるとガード級の主砲とシェルの間合いになる。',
+      note: '副兵装を一度に見るための小さな戦い。人類は拠点（シェルと迎撃）・ノード艦とガード級（迎撃）・砲撃艦（シェル）に、ミサイル艦（誘導弾）と無人機母艦（無人機）を加えた。最初に拠点と砲撃艦が、迫ってくるナーム級の群れへ超遠距離からシェルを撃ち込む。ザイレンはナーム級75とガルメス級4で、ガルメス級には試しに誘導弾を積んだ。ミサイル艦と母艦は射程を保って撃ち、ナーム級が寄ってくるとガード級の主砲とシェルの間合いになる。',
       settings: { timeLimit: 3 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 2 * M, sharing: 'always', retreatBelow: 0.2 },

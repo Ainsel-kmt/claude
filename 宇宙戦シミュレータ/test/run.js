@@ -50,16 +50,13 @@ for (const p of P.SCENARIOS) {
 
 // ---- 設定資料の筋: A は人類勝ち、B はザイレン勝ち
 {
-  // B はもとは設定どおりザイレンの勝ちだったが、ノード艦にシェルを積んでから人類が初手で圧勝するようになった。
-  // ユーザーの判断でその結果を受け入れた（2026-10-16）。ノード艦のシェルを外すと、設定どおりの筋に戻る
   const a = E.runOnce(P.SCENARIOS.find((x) => x.id === 'sA').make(), 1);
+  const b = E.runOnce(P.SCENARIOS.find((x) => x.id === 'sB').make(), 1);
   check('S星系外縁 A は人類の勝ち', a.winner === 0, a.text);
-  const noShell = (id) => { const s = P.SCENARIOS.find((x) => x.id === id).make(); s.types.node.sOn = false; return s; };
-  const b = E.runOnce(noShell('sB'), 1);
-  check('ノード艦のシェルを外せば、S星系外縁 B はザイレンの勝ち', b.winner === 1, b.text);
-  const S = E.createSim(noShell('sB'), {});
+  check('S星系外縁 B はザイレンの勝ち', b.winner === 1, b.text);
+  const S = E.createSim(P.SCENARIOS.find((x) => x.id === 'sB').make(), {});
   E.runToEnd(S);
-  check('（シェルなしの）B では展開中の静穏場艦が沈む', S.events.some((e) => e.kind === 'fieldFail'));
+  check('B では展開中の静穏場艦が沈む', S.events.some((e) => e.kind === 'fieldFail'));
 }
 
 // ---- 集中射撃ではランチェスターの二乗則に近い残り方をする
