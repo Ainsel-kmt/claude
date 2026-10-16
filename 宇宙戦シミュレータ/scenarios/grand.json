@@ -90,10 +90,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 1.5,
    "pdChance": 0.5,
-   "pdInterval": 6
+   "pdInterval": 6,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "guard": {
    "name": "ガード級",
@@ -151,10 +159,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "comms": {
    "name": "通信艦",
@@ -212,10 +228,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "quiet": {
    "name": "静穏場艦",
@@ -273,10 +297,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "picket": {
    "name": "哨戒艦",
@@ -334,10 +366,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "base": {
    "name": "人類主拠点",
@@ -395,10 +435,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 3,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 2,
    "pdChance": 0.5,
-   "pdInterval": 5
+   "pdInterval": 5,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "narm": {
    "name": "ナーム級",
@@ -456,10 +504,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 0.5,
    "pdChance": 0.1,
-   "pdInterval": 20
+   "pdInterval": 20,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "garmes": {
    "name": "ガルメス級",
@@ -517,10 +573,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 1.5,
    "pdChance": 0.4,
-   "pdInterval": 8
+   "pdInterval": 8,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "elda": {
    "name": "エルダ級",
@@ -578,10 +642,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "artillery": {
    "name": "砲撃艦",
@@ -639,10 +711,18 @@
    "sReturn": true,
    "sMinHit": 0,
    "sMinCount": 3,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "missile": {
    "name": "ミサイル艦",
@@ -700,10 +780,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "carrier": {
    "name": "無人機母艦",
@@ -761,10 +849,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 1.5,
    "pdChance": 0.4,
-   "pdInterval": 8
+   "pdInterval": 8,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   },
   "base2": {
    "name": "人類第2拠点",
@@ -822,10 +918,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 3,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": true,
    "pdRange": 2,
    "pdChance": 0.5,
-   "pdInterval": 5
+   "pdInterval": 5,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   }
  },
  "units": [

@@ -51,6 +51,7 @@
     shell: 'シェル型（実体弾。敵の群れの進む先を見越して撃ち込み、着いた点で爆発する）',
     missile: '誘導弾（標的を追う。迎撃で落とされる）',
     drone: '無人機（標的のそばへ飛び、しばらく撃ち続ける。迎撃で落とされる）',
+    lance: '貫く線（溜めてから、線の上に並ぶ敵すべてを一度に撃つ）',
   };
 
   // ---------------------------------------------------------------- 既定値
@@ -67,7 +68,10 @@
     layerOn: false, layerSpeed: 0.025, layerMax: 300,
     sOn: false, sKind: 'shell', sDamage: 30, sRange: 3, sInterval: 60, sAccuracy: 0.9, sFalloff: 0, sMounts: 1,
     sSpeed: 0.02, sBypass: 1, sLife: 600, sBlast: 0, sAmmo: 0, sReturn: false, sMinHit: 0, sMinCount: 1,
+    sCharge: 600, sWidth: 0.3,
     pdOn: false, pdRange: 1, pdChance: 0.3, pdInterval: 10,
+    hubOn: false, hubSpeed: 0.025,
+    hangarOn: false, hangarCap: 40, hangarInterval: 30, hangarBatch: 2,
   };
 
   const DEFAULT_SETTINGS = {
@@ -126,14 +130,16 @@
     { g: '副兵装', k: 'sKind', label: '種類', t: 'select', opts: S_KIND, on: 'sOn' },
     { g: '副兵装', k: 'sDamage', label: '威力（1発）', min: 0, on: 'sOn' },
     { g: '副兵装', k: 'sRange', label: '射程', unit: '光秒', step: 0.1, min: 0, on: 'sOn', help: '無人機では、発進させる相手までの距離' },
-    { g: '副兵装', k: 'sInterval', label: '発射間隔', unit: '秒', min: 1, on: 'sOn', help: '無人機では発進の間隔' },
+    { g: '副兵装', k: 'sInterval', label: '発射間隔', unit: '秒', min: 1, on: 'sOn', help: '無人機では発進の間隔。貫く線では、撃ってから次の溜めに入れるまでの時間' },
     { g: '副兵装', k: 'sAccuracy', label: '命中率', t: 'pct', on: 'sOn', help: 'シェル型では、狙った点に届く割合。外れると狙いから爆発半径の1〜2倍ずれた点で爆発する' },
     { g: '副兵装', k: 'sFalloff', label: '射程端での命中低下', t: 'pct', on: 'sOn', kinds: ['line'] },
-    { g: '副兵装', k: 'sMounts', label: '1回に撃つ数', unit: '発', min: 1, on: 'sOn', help: '別々の敵へ1発ずつ撃ち、敵が少なければ余りは標的に重ねる。無人機では1回に発進させる機数' },
+    { g: '副兵装', k: 'sMounts', label: '1回に撃つ数', unit: '発', min: 1, on: 'sOn', help: '別々の敵へ1発ずつ撃ち、敵が少なければ余りは標的に重ねる。無人機では1回に発進させる機数。貫く線では、別々の向きへ撃つ線の数' },
     { g: '副兵装', k: 'sSpeed', label: '弾の速さ', unit: 'c', step: 0.005, min: 0.001, on: 'sOn', kinds: ['shell', 'missile', 'drone'], help: '届くまでの時間 = 距離 ÷ 速さ。0.01c なら1光秒に100秒' },
     { g: '副兵装', k: 'sBypass', label: 'ウォードを素通りする割合', t: 'pct', on: 'sOn', help: 'この割合の損害はウォードに止められず、船体に直接当たる。ウォードは歪曲（ライン系統など）への防御なので、実体弾は素通りする想定' },
     { g: '副兵装', k: 'sBlast', label: '爆発の半径', unit: '光秒', step: 0.05, min: 0, on: 'sOn', kinds: ['shell', 'missile'], help: '爆発すると、この半径の中の敵すべてに威力いっぱいの損害を与える（味方は巻き込まない）。シェル型は狙った点で、誘導弾は当たった艦の位置で爆発する。0 なら爆発しない' },
-    { g: '副兵装', k: 'sMinCount', label: '撃つのに要る敵の数', unit: '隻', min: 1, on: 'sOn', kinds: ['shell'], help: '爆発の範囲に入る見込みの敵がこの数以上いる群れにだけ撃つ' },
+    { g: '副兵装', k: 'sMinCount', label: '撃つのに要る敵の数', unit: '隻', min: 1, on: 'sOn', kinds: ['shell', 'lance'], help: 'シェル型は、爆発の範囲に入る見込みの敵がこの数以上いる群れにだけ撃つ。貫く線は、線の上にこの数以上の敵が並ぶ向きにだけ撃つ' },
+    { g: '副兵装', k: 'sCharge', label: '溜めの時間', unit: '分', scale: 60, step: 0.5, min: 0, on: 'sOn', kinds: ['lance'], help: '撃つ相手が見つかると溜めに入り、この時間のあとで撃つ。溜めている間は動けない。溜め終わって撃つ相手がいなければ、溜めたまま待つ（そのあいだは動ける）' },
+    { g: '副兵装', k: 'sWidth', label: '線の太さ', unit: '光秒', step: 0.05, min: 0.01, on: 'sOn', kinds: ['lance'], help: '撃った瞬間に、射程いっぱいまで伸びる線の、この太さの中にいる敵すべてに損害を与える（味方は巻き込まない）。向きは線の上に敵がいちばん多く並ぶ向きを選ぶ' },
     { g: '副兵装', k: 'sMinHit', label: '撃つ見込み', t: 'pct', on: 'sOn', kinds: ['line', 'missile'], help: '当たる見込みがこれ以上の敵にだけ撃つ（弾を無駄にしない）。0% なら射程に入れば撃つ' },
     { g: '副兵装', k: 'sAmmo', label: '弾数', unit: '発', min: 0, on: 'sOn', help: '撃ち尽くすと撃てない。味方の拠点の近くにいると少しずつ補充される。0 なら無制限。無人機では発進させられる機数' },
     { g: '副兵装', k: 'sReturn', label: '弾が尽きたら補充に戻る', t: 'bool', on: 'sOn', help: 'オンなら、撃ち尽くすといちばん近い味方の拠点へ戻り、満タンになってから戦いに戻る' },
@@ -142,6 +148,12 @@
     { g: '迎撃', k: 'pdRange', label: '迎撃の届く距離', unit: '光秒', step: 0.1, min: 0, on: 'pdOn' },
     { g: '迎撃', k: 'pdChance', label: '迎撃率（1回あたり）', t: 'pct', on: 'pdOn' },
     { g: '迎撃', k: 'pdInterval', label: '迎撃の間隔', unit: '秒', min: 1, on: 'pdOn', help: '1回迎撃を試みると、次はこの秒数のあと。一度に大量に来ると迎撃が追いつかない' },
+    { g: '動くハブ', k: 'hubOn', label: '進みながら後ろにレーンを敷く（動くハブ）', t: 'bool', help: 'レーンの端がいつもこの艦のところにあるので、レーン網につながっている味方はこの艦のそばまでレーンで跳べる。妨害場がレーンに掛かるとそこで寸断される。この艦が沈むか離脱すると、この艦が敷いたレーンは消える' },
+    { g: '動くハブ', k: 'hubSpeed', label: '敷設の速さ', unit: '光秒/分', scale: 1 / 60, step: 0.1, min: 0.001, on: 'hubOn', help: 'レーンを引きずっているあいだは、通常航行がこの速さまでに抑えられる' },
+    { g: '方舟', k: 'hangarOn', label: '艦を積んで運ぶ（方舟）', t: 'bool', help: '積む艦は、配置でその艦の「積まれる艦」にこの艦を選ぶ。積まれている艦は戦場にいない扱い（撃たない・撃たれない）で、一緒に動く。この艦が沈むと、積まれたままの艦も沈む' },
+    { g: '方舟', k: 'hangarCap', label: '積める数', unit: '隻', min: 0, on: 'hangarOn' },
+    { g: '方舟', k: 'hangarInterval', label: '出す間隔', unit: '秒', min: 1, on: 'hangarOn', help: '探知距離の中に敵を見つけたら（陣営の反応時間のあと）、この間隔で艦を出し始める' },
+    { g: '方舟', k: 'hangarBatch', label: '1回に出す数', unit: '隻', min: 1, on: 'hangarOn' },
   ];
 
   const SETTING_FIELDS = [
@@ -180,14 +192,14 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const hyp = (x, y) => Math.sqrt(x * x + y * y);
   const dist = (a, b) => hyp(a.x - b.x, a.y - b.y);
-  const isKey = (d) => d.linkOn || d.fieldOn || d.commsOn || d.layerOn;
+  const isKey = (d) => d.linkOn || d.fieldOn || d.commsOn || d.layerOn || d.hubOn || d.hangarOn;
   const isStation = (d) => d.speed <= 0 && d.jump === 'none';
   const hasSecondary = (d) => d.sOn && d.sDamage > 0 && d.sRange > 0;
   const isArmed = (d) => d.wDamage > 0 || hasSecondary(d);
   // 行動の距離: 主砲の射程。主砲がない艦は副兵装の射程
   const engageRange = (d) => (d.wDamage > 0 ? d.wRange : hasSecondary(d) ? d.sRange : d.wRange);
-  // 副兵装の射程のうち、目の前の敵に撃つもの（シェル型は超遠距離の面制圧なので含めない）
-  const secReach = (d) => (hasSecondary(d) && d.sKind !== 'shell' ? d.sRange : 0);
+  // 副兵装の射程のうち、目の前の敵に撃つもの（シェル型・貫く線は超遠距離の兵器なので含めない）
+  const secReach = (d) => (hasSecondary(d) && d.sKind !== 'shell' && d.sKind !== 'lance' ? d.sRange : 0);
   // 届く距離: 主砲と副兵装（シェル型を除く）の射程の長いほう
   const reachOf = (d) => Math.max(d.wDamage > 0 ? d.wRange : 0, secReach(d));
   const mountsOf = (d) => Math.max(1, Math.floor(d.wMounts || 1));
@@ -247,7 +259,18 @@
       if (u.appear) o.appear = Math.max(0, +u.appear || 0);
       if (u.locked) o.locked = true;
       if (u.goal && u.goal.length === 2) o.goal = [+u.goal[0] || 0, +u.goal[1] || 0];
+      if (u.aboard != null && u.aboard !== '' && +u.aboard >= 0) o.aboard = Math.floor(+u.aboard);
       return o;
+    });
+    // 積まれる艦（aboard: 積む艦の units の番号）。積む艦が方舟でない・陣営が違う・積める数を超えた分は外す
+    const load = new Map();
+    s.units.forEach((o, i) => {
+      if (o.aboard == null) return;
+      const c = s.units[o.aboard];
+      const cd = c && s.types[c.type];
+      const n = load.get(o.aboard) || 0;
+      if (!c || o.aboard === i || c.aboard != null || !cd.hangarOn || c.side !== o.side || n >= cd.hangarCap || s.types[o.type].hangarOn) { delete o.aboard; return; }
+      load.set(o.aboard, n + 1);
     });
     s.lanes = (s.lanes || []).filter((l) => l && l.pts && l.pts.length >= 2).map((l) => ({
       side: l.side === 0 ? 0 : 1,
@@ -305,11 +328,13 @@
         fs: 0, ft: 0, lay: null, layCd: 0, retreat: false,
         laneNo: 0, laneNoX: 0, laneNoY: 0, protId: -1, protAt: 0, reliefId: -1, station: -1,
         kills: 0, dealt: 0, diedAt: -1, by: -1, state: '',
+        aboard: p.aboard != null ? p.aboard : -1, cargo: null, hangarOpen: false, hangarNext: 0,
+        hubLane: -1, hubRx: 0, hubRy: 0, charge: 0, charged: false,
       };
       u.cd = S.rng() * d.wInterval;
       // 副兵装の装填（副兵装のない艦では乱数を引かない。これまでのシナリオの結果を変えないため）
       // シェル型は最初から撃てる（初手の一斉射）
-      u.cd2 = hasSecondary(d) ? (d.sKind === 'shell' ? 0 : S.rng() * d.sInterval) : 0;
+      u.cd2 = hasSecondary(d) ? (d.sKind === 'shell' || d.sKind === 'lance' ? 0 : S.rng() * d.sInterval) : 0;
       u.vx = 0; u.vy = 0; u.ox = u.x; u.oy = u.y; u.scanAt = 0;
       u.pdNext = 0;
       // 副兵装の弾（無制限なら Infinity）と補充の進み
@@ -318,6 +343,13 @@
       S.units.push(u);
       S.maxRange = Math.max(S.maxRange, d.wRange, hasSecondary(d) ? d.sRange : 0);
     });
+    // 方舟に積まれた艦: 積む艦の位置から始め、積む艦の積荷の一覧に入れる
+    for (const u of S.units) {
+      if (u.aboard < 0) continue;
+      const c = S.units[u.aboard];
+      u.x = u.hx = u.px = c.x; u.y = u.hy = u.py = c.y; u.appear = 0;
+      (c.cargo || (c.cargo = [])).push(u.id);
+    }
     // 持ち場防衛の艦は、持ち場の近く（STATION_RANGE 以内）にある味方の拠点（動かない艦）を覚えておく
     for (const u of S.units) {
       if (u.ai !== 'hold') continue;
@@ -335,6 +367,7 @@
 
     spawn(S);
     updateFields(S);
+    updateHubs(S);
     rebuildLanes(S);
     updateSharing(S, true);
     updateContacts(S);
@@ -420,6 +453,13 @@
         case 'resupplyGo': text = sd + ' の ' + nm + ' が副兵装を撃ち尽くし、' + e.v + ' へ補充に戻る'; break;
         case 'resupplyDone': text = sd + ' の ' + nm + ' が補充を終えて戦いに戻る'; break;
         case 'stationLost': text = sd + ' の ' + nm + ' が守っていた ' + e.v + ' を失い、護衛に切り替えた'; break;
+        case 'hangarOpen': text = sd + ' の ' + nm + ' が敵を見つけ、積んでいた艦（' + e.v + '）を出し始めた'; break;
+        case 'launch': text = sd + ' の ' + nm + ' が ' + e.v + ' から出た'; break;
+        case 'hangarEmpty': text = sd + ' の ' + nm + ' が積んでいた艦をすべて出した'; break;
+        case 'cargoLost': text = sd + ' の ' + nm + ' と一緒に、積まれていた艦（' + e.v + '）が沈んだ'; break;
+        case 'hubLost': text = sd + ' の ' + nm + ' の' + e.v + 'で、この艦が敷いたレーンが消えた'; break;
+        case 'lanceCharge': text = sd + ' の ' + nm + ' が貫く線の溜めに入った（' + e.v + '）'; break;
+        case 'lanceFire': text = sd + ' の ' + nm + ' が貫く線を撃った（' + e.v + '）'; break;
         case 'end': text = e.v; break;
         default: text = e.kind;
       }
@@ -432,7 +472,7 @@
 
   function spawn(S) {
     for (const u of S.units) {
-      if (u.present || !u.alive || u.appear > S.t) continue;
+      if (u.present || !u.alive || u.appear > S.t || u.aboard >= 0) continue;
       u.present = true;
       const d = u.def;
       const byJump = d.jump === 'free' && (u.appear > 0 || u.startLocked);
@@ -450,7 +490,49 @@
     }
   }
 
+  // ---- 方舟: 積まれた艦を運び、敵を見つけたら少しずつ出す
+  function cargoOf(S, c) {
+    if (!c.cargo) return [];
+    return c.cargo.map((id) => S.units[id]).filter((w) => w.alive && w.aboard === c.id);
+  }
+
+  function updateHangars(S) {
+    for (const c of S.units) {
+      if (!c.cargo || !c.def.hangarOn) continue;
+      const list = cargoOf(S, c);
+      if (!list.length) continue;
+      // 積まれている艦は母艦と一緒に動く（記録と、出すときの位置のため）
+      const at = c.jump ? { x: c.px, y: c.py } : c;
+      for (const w of list) { w.x = at.x; w.y = at.y; }
+      if (!visible(c)) continue;
+      if (!c.hangarOpen) {
+        // 探知距離の中に、陣営として動ける（反応時間を過ぎた）敵がいれば出し始める
+        const C = S.contacts[c.side], R = c.def.sensor;
+        for (const e of S.units) {
+          if (e.side === c.side || !visible(e)) continue;
+          if (Math.abs(e.x - c.x) > R || Math.abs(e.y - c.y) > R || dist(e, c) > R) continue;
+          const k = C.get(e.id);
+          if (k && k.at <= S.t) { c.hangarOpen = true; c.hangarNext = S.t; ev(S, 'hangarOpen', c.side, c.tid, list.length + '隻'); break; }
+        }
+        if (!c.hangarOpen) continue;
+      }
+      if (S.t < c.hangarNext) continue;
+      const n = Math.min(list.length, Math.max(1, Math.floor(c.def.hangarBatch)));
+      for (let i = 0; i < n; i++) {
+        const w = list[i];
+        const a = S.rng() * Math.PI * 2, r = 0.4 + S.rng() * 0.4;
+        w.x = c.x + Math.cos(a) * r; w.y = c.y + Math.sin(a) * r;
+        w.hx = w.x; w.hy = w.y; w.px = w.x; w.py = w.y; w.ox = w.x; w.oy = w.y;
+        w.aboard = -1; w.present = true; w.lock = 0;
+        ev(S, 'launch', w.side, w.tid, c.def.name);
+      }
+      c.hangarNext = S.t + Math.max(1, c.def.hangarInterval);
+      if (n === list.length) ev(S, 'hangarEmpty', c.side, c.tid);
+    }
+  }
+
   function startJump(S, u, x, y, out) {
+    hubDetach(S, u);
     let p = { x, y };
     if (!out) {
       p = clampOutOfFields(S, u.x, u.y, x, y);
@@ -463,6 +545,7 @@
   }
 
   function startLaneJump(S, u, x, y, out) {
+    hubDetach(S, u);
     u.jump = { t: S.set.laneJumpTime, x, y, out: !!out, lane: true };
     u.px = u.x; u.py = u.y;
     ev(S, out ? 'retreat' : 'lane', u.side, u.tid);
@@ -476,7 +559,12 @@
       if (u.jump.t > 0) continue;
       const j = u.jump;
       u.jump = null;
-      if (j.out) { u.escaped = true; ev(S, 'escape', u.side, u.tid); continue; }
+      if (j.out) {
+        u.escaped = true; ev(S, 'escape', u.side, u.tid);
+        for (const w of cargoOf(S, u)) { w.escaped = true; ev(S, 'escape', w.side, w.tid); }
+        hubRemove(S, u, '離脱');
+        continue;
+      }
       u.x = j.x; u.y = j.y;
       u.lock = u.def.lockTime; u.lockMax = u.def.lockTime;
       if (u.def.commsOn && !j.lane) u.commsAt = S.t + u.def.commsResync;
@@ -524,6 +612,7 @@
     const edges = [];
     const ends = [];
     S.lanes.forEach((L, li) => {
+      if (L.gone) return;
       let prev = -1;
       const first = nodes.length;
       for (let i = 0; i < L.pts.length; i++) {
@@ -586,6 +675,53 @@
       if (d < bd) { bd = d; best = i; }
     }
     return best;
+  }
+
+  // ---- 動くハブ: 進みながら後ろにレーンを敷く。レーンの端はいつも艦のところにある
+  const HUB_REBUILD = 0.5;    // 端がこれだけ動いたらレーン網を作り直す（毎刻みは重いので）
+  const HUB_BEND = 0.1;       // 進む向きがこれ（sin の値）より曲がったら折れ点を残す
+  const HUB_MAXPTS = 400;
+
+  function updateHubs(S) {
+    for (const u of S.units) {
+      if (!u.def.hubOn || !visible(u)) continue;
+      let L = u.hubLane >= 0 ? S.lanes[u.hubLane] : null;
+      if (!L) {
+        S.lanes.push({ side: u.side, pts: [{ x: u.x, y: u.y }, { x: u.x, y: u.y }], grow: true, hub: u.id });
+        u.hubLane = S.lanes.length - 1; u.hubRx = u.x; u.hubRy = u.y;
+        S.laneVer++;
+        continue;
+      }
+      const tip = L.pts[L.pts.length - 1], prev = L.pts[L.pts.length - 2];
+      const mx = u.x - tip.x, my = u.y - tip.y, moved = hyp(mx, my);
+      if (moved < 1e-4) continue;
+      const sx = tip.x - prev.x, sy = tip.y - prev.y, seg = hyp(sx, sy);
+      let bend = false;
+      if (seg > 0.5 && moved > 0.05 && L.pts.length < HUB_MAXPTS) bend = Math.abs(sx * my - sy * mx) / (seg * moved) > HUB_BEND || (sx * mx + sy * my) < 0;
+      if (bend) L.pts.push({ x: u.x, y: u.y });
+      else { tip.x = u.x; tip.y = u.y; }
+      if (bend || hyp(u.x - u.hubRx, u.y - u.hubRy) >= HUB_REBUILD) { u.hubRx = u.x; u.hubRy = u.y; S.laneVer++; }
+    }
+  }
+
+  // ジャンプするときは、いま引いているレーンをその場に残して切り離す（着いた先から新しく引く）
+  function hubDetach(S, u) {
+    if (u.hubLane < 0) return;
+    const L = S.lanes[u.hubLane];
+    L.grow = false;
+    const tip = L.pts[L.pts.length - 1];
+    tip.x = u.x; tip.y = u.y;
+    u.hubLane = -1;
+    S.laneVer++;
+  }
+
+  // 艦が沈むか離脱すると、その艦が敷いたレーンはすべて消える
+  function hubRemove(S, u, why) {
+    if (!u.def.hubOn) return;
+    let n = 0;
+    for (const L of S.lanes) if (L.hub === u.id && !L.gone) { L.gone = true; L.grow = false; n++; }
+    u.hubLane = -1;
+    if (n) { S.laneVer++; ev(S, 'hubLost', u.side, u.tid, why); }
   }
 
   // ---------------------------------------------------------------- 情報
@@ -814,7 +950,7 @@
   // ---------------------------------------------------------------- 移動
 
   function cruise(S, u, x, y) {
-    const sp = u.def.speed;
+    const sp = u.def.hubOn ? Math.min(u.def.speed, u.def.hubSpeed) : u.def.speed;
     if (sp <= 0) return;
     const dx = x - u.x, dy = y - u.y, L = hyp(dx, dy);
     if (L < 1e-6) return;
@@ -1006,7 +1142,8 @@
 
     if (u.fs === 1) { u.state = 'deploy'; return; }
     if (u.fs === 2) { u.state = 'field'; return; }
-    if (u.retreat) { doRetreat(S, u); return; }
+    if (u.retreat) { u.charge = 0; doRetreat(S, u); return; }
+    if (u.charge > 0) { u.state = 'charge'; return; }
     if (d.layerOn && layerThink(S, u)) return;
 
     if (!u.goalDone) {
@@ -1118,7 +1255,7 @@
       const l = grid.get(k);
       if (l) l.push(u); else grid.set(k, [u]);
     }
-    const movable = (u) => u.def.speed > 0 && u.fs !== 1 && u.fs !== 2 && !u.lay;
+    const movable = (u) => u.def.speed > 0 && u.fs !== 1 && u.fs !== 2 && !u.lay && !(u.charge > 0);
     for (const a of list) {
       const cx = Math.floor(a.x / g), cy = Math.floor(a.y / g);
       for (let ax = -1; ax <= 1; ax++) for (let ay = -1; ay <= 1; ay++) {
@@ -1158,10 +1295,17 @@
     if (v.fs === 1) ev(S, 'fieldFail', v.side, v.tid);
     if (v.fs === 2) ev(S, 'fieldDown', v.side, v.tid, '艦が撃沈された');
     if (v.lay) { S.lanes[v.lay.li].grow = false; v.lay = null; S.laneVer++; ev(S, 'layStop', v.side, v.tid); }
+    const cargo = cargoOf(S, v);
+    if (cargo.length) {
+      for (const w of cargo) kill(S, w, by);
+      ev(S, 'cargoLost', v.side, v.tid, cargo.length + '隻');
+    }
+    hubRemove(S, v, '撃沈');
+    v.charge = 0; v.charged = false;
   }
 
   // 射撃の記録（SHOT_W 個ずつ）。kind は SHOT_KIND、flight は届くまでの秒数（記録の時刻は着弾の時刻）
-  const SHOT_KIND = { main: 0, line: 1, shell: 2, missile: 3, drone: 4, intercept: 5 };
+  const SHOT_KIND = { main: 0, line: 1, shell: 2, missile: 3, drone: 4, intercept: 5, lance: 6 };
   function recordShot(S, sx, sy, tx, ty, hit, side, shooter, target, kind, flight, killed) {
     if (S.record) S.shots.push(sx, sy, tx, ty, hit, side, S.t, shooter, target, kind, flight, killed || 0);
   }
@@ -1358,12 +1502,93 @@
     else u.scanAt = S.t + SHELL_SCAN;
   }
 
+  // ---- 貫く線: 溜めてから、射程いっぱいまで伸びる線の上に並ぶ敵すべてを一度に撃つ
+  // 向き: 射程内で見えている敵それぞれへ向けた線のうち、線の太さの中に入る敵がいちばん多いもの
+  const LANCE_SCAN = 30;      // 撃つ向きが見つからないとき、次に探すまでの秒数
+
+  function lancePlan(S, u, taken) {
+    const d = u.def, R = d.sRange, W = Math.max(0.01, d.sWidth) / 2, need = Math.max(1, d.sMinCount || 1);
+    const list = [];
+    for (const e of S.units) {
+      if (e.side === u.side || !visible(e) || (taken && taken.has(e.id))) continue;
+      const dx = e.x - u.x, dy = e.y - u.y;
+      if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
+      const dd = hyp(dx, dy);
+      if (dd > R || dd < 1e-6 || !canSee(S, u, e)) continue;
+      list.push({ e, dx, dy, dd });
+    }
+    let best = null;
+    for (const a of list) {
+      const ux = a.dx / a.dd, uy = a.dy / a.dd;
+      let n = 0;
+      for (const b of list) {
+        const along = b.dx * ux + b.dy * uy;
+        if (along < 0 || along > R) continue;
+        if (Math.abs(b.dx * uy - b.dy * ux) <= W) n++;
+      }
+      if (!best || n > best.n || (n === best.n && a.dd < best.dd)) best = { ux, uy, n, dd: a.dd, e: a.e };
+    }
+    return best && best.n >= need ? best : null;
+  }
+
+  // 線の上（太さの中）にいる敵すべてに損害。命中率は1隻ずつ（回避で下がる）。損害を受けた数と沈んだ数を返す
+  function fireLance(S, u, plan, taken) {
+    const d = u.def, R = d.sRange, W = Math.max(0.01, d.sWidth) / 2, A = S.arms[u.side];
+    if (u.ammo !== Infinity) u.ammo--;
+    A.fired++;
+    let hit = 0, killed = 0;
+    for (const e of S.units) {
+      if (e.side === u.side || !visible(e)) continue;
+      const dx = e.x - u.x, dy = e.y - u.y;
+      const along = dx * plan.ux + dy * plan.uy;
+      if (along < 0 || along > R || Math.abs(dx * plan.uy - dy * plan.ux) > W) continue;
+      if (taken) taken.add(e.id);
+      if (S.rng() >= d.sAccuracy * (1 - e.def.evasion)) continue;
+      hit++;
+      damage(S, u, e, d.sDamage, d.sBypass);
+      if (!e.alive) killed++;
+    }
+    if (hit) { A.hits++; A.blastHits += hit; }
+    recordShot(S, u.x, u.y, u.x + plan.ux * R, u.y + plan.uy * R, hit, u.side, u.id, plan.e.id, SHOT_KIND.lance, 0, killed);
+    ev(S, 'lanceFire', u.side, u.tid, hit + '隻に損害、' + killed + '隻撃沈');
+  }
+
+  function secondaryLance(S, u) {
+    const d = u.def, dt = S.set.dt;
+    if (u.cd2 > 0) { u.cd2 -= dt; return; }
+    if (u.ammo <= 0) return;
+    if (u.charge > 0) {
+      u.charge -= dt;
+      if (u.charge > 0) return;
+      u.charge = 0; u.charged = true;
+      u.scanAt = 0;
+    }
+    if (S.t < u.scanAt) return;
+    const plan = lancePlan(S, u, null);
+    if (!plan) { u.scanAt = S.t + LANCE_SCAN; return; }
+    if (!u.charged && d.sCharge > 0) {
+      u.charge = d.sCharge;
+      ev(S, 'lanceCharge', u.side, u.tid, fmtMin(d.sCharge));
+      return;
+    }
+    // 1回に撃つ数だけ、別々の向きへ（2本目からは、まだ撃っていない敵が並ぶ向き）
+    const taken = new Set(), n = Math.max(1, Math.floor(d.sMounts || 1));
+    let p = plan;
+    for (let i = 0; i < n && p && u.ammo > 0; i++) {
+      fireLance(S, u, p, taken);
+      p = i + 1 < n ? lancePlan(S, u, taken) : null;
+    }
+    u.charged = false;
+    u.cd2 = Math.max(0, d.sInterval);
+  }
+
   // 撃つ相手が現れてから最初の1発までの照準の時間の上限（間隔の長い兵器が何分も待たないように）
   const AIM_MAX = 30;
 
   function secondary(S, u) {
     const d = u.def, dt = S.set.dt;
     if (d.sKind === 'shell') { secondaryShell(S, u); return; }
+    if (d.sKind === 'lance') { secondaryLance(S, u); return; }
     if (u.ammo <= 0) { u.cd2 = IDLE; return; }
     if (u.cd2 === IDLE) {
       if (!pickSecondary(S, u)) return;
@@ -1613,7 +1838,7 @@
     });
   }
 
-  const F = { alive: 1, present: 2, escaped: 4, jump: 8, lock: 16, linked: 32, deploy: 64, field: 128, retreat: 256, lay: 512, wait: 1024, laneJump: 2048, resupply: 4096 };
+  const F = { alive: 1, present: 2, escaped: 4, jump: 8, lock: 16, linked: 32, deploy: 64, field: 128, retreat: 256, lay: 512, wait: 1024, laneJump: 2048, resupply: 4096, charge: 8192, charged: 16384, aboard: 32768, hub: 65536 };
 
   // 射撃の記録: 1発あたり SHOT_W 個の数値
   //  0-1 撃った位置, 2-3 着いた位置, 4 命中なら1（誘導弾が迎撃されたら -1。シェル型は爆発で損害を受けた敵の数）,
@@ -1651,6 +1876,10 @@
       if (u.lay) fl |= F.lay;
       if (u.state === 'wait') fl |= F.wait;
       if (u.resupplying) fl |= F.resupply;
+      if (u.charge > 0) fl |= F.charge;
+      if (u.charged) fl |= F.charged;
+      if (u.aboard >= 0) fl |= F.aboard;
+      if (u.hubLane >= 0) fl |= F.hub;
       a[o] = u.jump ? u.px : u.x; a[o + 1] = u.jump ? u.py : u.y;
       a[o + 2] = Math.max(0, u.hp) / u.def.hp;
       a[o + 3] = u.def.shield > 0 ? u.sh / u.def.shield : 0;
@@ -1666,7 +1895,7 @@
       tg[i] = u.alive ? u.tgt : -1;
     }
     if (S.laneSnapVer !== S.laneVer || !S.laneSnap) {
-      S.laneSnap = S.lanes.map((l) => ({ side: l.side, grow: !!l.grow, pts: l.pts.map((p) => [p.x, p.y]) }));
+      S.laneSnap = S.lanes.filter((l) => !l.gone).map((l) => ({ side: l.side, grow: !!l.grow, hub: l.hub != null, pts: l.pts.map((p) => [p.x, p.y]) }));
       S.laneSnapVer = S.laneVer;
     }
     S.shotsFlushed = true;
@@ -1750,6 +1979,7 @@
     if (S.shotsFlushed || !S.record) { S.shots = []; S.shotsFlushed = false; }
     spawn(S);
     finishJumps(S);
+    updateHangars(S);
     updateFields(S);
     rebuildLanes(S);
     updateSharing(S, false);
@@ -1762,6 +1992,7 @@
     separate(S);
     // この刻みの速さ（シェルの見越しに使う）
     for (const u of S.units) { u.vx = (u.x - u.ox) / S.set.dt; u.vy = (u.y - u.oy) / S.set.dt; }
+    updateHubs(S);
     rebuildLanes(S);
     combat(S);
     updateProjectiles(S);

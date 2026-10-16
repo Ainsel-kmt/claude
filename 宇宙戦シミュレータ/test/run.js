@@ -331,6 +331,117 @@ for (const p of P.SCENARIOS) {
   check('間隔0なら重なったまま', Math.hypot(S0.units[0].x - S0.units[1].x, S0.units[0].y - S0.units[1].y) < 1e-9);
 }
 
+// ---- 旗艦（オルドラ級）: 貫く線
+{
+  const lance = (extra) => Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'static', speed: 0.05, sensor: 200, jump: 'none',
+    sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
+    sAmmo: 0, sMinCount: 3, sCharge: 600, sWidth: 0.3,
+  }, extra || {});
+  const still = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, shield: 0 });
+  const warded = Object.assign(clone(still), { hp: 1e6, shield: 1500 });
+  const lost = (S, i) => 1e6 - S.units[i].hp;
+  const cfg = { settings: { timeLimit: 3 * 3600, spacing: 0 } };
+  // 20光秒先に4隻を一列（x 方向）に、1隻を線から0.5光秒ずらして、味方を1隻線の上に置く
+  const units = [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 20, y: 0 }, { type: 'b', side: 1, x: 22, y: 0.1 }, { type: 'b', side: 1, x: 25, y: -0.1 }, { type: 'w', side: 1, x: 28, y: 0 },
+    { type: 'b', side: 1, x: 24, y: 0.5 },
+    { type: 'f', side: 0, x: 15, y: 0 },
+  ];
+  const L = runFor(scn({ a: lance(), b: still, w: warded, f: still }, units, cfg), 300);
+  check('貫く線: 溜めている間は撃たない', L.arms[0].fired === 0 && L.units[0].charge > 0, { fired: L.arms[0].fired, charge: L.units[0].charge });
+  E.runUntil(L, 700);
+  check('貫く線: 溜め（10分）のあとで撃つ', L.arms[0].fired === 1, L.arms[0].fired);
+  check('貫く線: 線の上に並ぶ敵すべてに威力いっぱい', [1, 2, 3].every((i) => lost(L, i) === 2000), [1, 2, 3].map((i) => lost(L, i)));
+  check('貫く線: ウォードで受けられる（まずウォードが減る）', lost(L, 4) === 500 && L.units[4].sh === 0, { hp: lost(L, 4), sh: L.units[4].sh });
+  check('貫く線: 線の太さの外と味方は無傷', lost(L, 5) === 0 && lost(L, 6) === 0, [lost(L, 5), lost(L, 6)]);
+
+  // 溜めている間は動けない（突撃の艦でも止まる）
+  const runner = lance({ ai: 'assault' });
+  const R = runFor(scn({ a: runner, b: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 },
+    { type: 'b', side: 1, x: 20, y: 0 }, { type: 'b', side: 1, x: 21, y: 0 }, { type: 'b', side: 1, x: 22, y: 0 },
+  ], cfg), 400);
+  check('貫く線: 溜めている間は動けない', R.units[0].charge > 0 && Math.hypot(R.units[0].x, R.units[0].y) < 1e-9, { x: R.units[0].x, charge: R.units[0].charge });
+
+  // 線の上に並ぶ数が足りなければ溜めに入らない
+  const N = runFor(scn({ a: lance(), b: still }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, { type: 'b', side: 1, x: 20, y: 0 }, { type: 'b', side: 1, x: 20, y: 5 }, { type: 'b', side: 1, x: 20, y: -5 },
+  ], cfg), 1200);
+  check('貫く線: 並ぶ数が「撃つのに要る敵の数」に届かなければ撃たない', N.arms[0].fired === 0 && !(N.units[0].charge > 0), { fired: N.arms[0].fired, charge: N.units[0].charge });
+}
+
+// ---- 旗艦: 方舟（積んで運び、敵を見つけたら出す。沈むと積荷も沈む）
+{
+  const ark = Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'static', speed: 0, jump: 'free', lockTime: 0, sensor: 30, hp: 1000, shield: 0,
+    hangarOn: true, hangarCap: 5, hangarInterval: 30, hangarBatch: 2,
+  });
+  const cargo = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0 });
+  const foe = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6 });
+  const units = [{ type: 'k', side: 1, x: 0, y: 0 }].concat(line('c', 1, 6, 0, 0, 0, { aboard: 0 }), [{ type: 'e', side: 0, x: 100, y: 0 }]);
+  const s0 = scn({ k: ark, c: cargo, e: foe }, units, { settings: { spacing: 0 } });
+  const norm = E.normalizeScenario(s0);
+  check('方舟: 積める数を超えた分は積まれない', norm.units.filter((u) => u.aboard === 0).length === 5, norm.units.map((u) => u.aboard));
+  const S = runFor(s0, 120);
+  const aboard = (S) => S.units.filter((u) => u.aboard === 0 && u.alive).length;
+  check('方舟: 敵が探知距離の外なら出さない（積まれた艦は戦場にいない）', aboard(S) === 5 && S.units.slice(1, 6).every((u) => !u.present), aboard(S));
+  // 敵を探知距離の中へ動かす
+  S.units[7].x = 20;
+  E.runUntil(S, 130);
+  check('方舟: 敵を見つけたら1回に2隻ずつ出す', aboard(S) === 3, aboard(S));
+  E.runUntil(S, 200);
+  check('方舟: 30秒ごとに出して、5隻を出し切る', aboard(S) === 0 && S.units.slice(1, 6).every((u) => u.present && Math.hypot(u.x, u.y) < 1), aboard(S));
+
+  // 沈むと積まれたままの艦も沈む（強い敵を横に置いて沈める。探知距離0なので積荷は出さない）
+  const s2 = clone(s0);
+  s2.types.e = Object.assign(clone(foe), { wDamage: 5000, wRange: 3, wInterval: 10, wAccuracy: 1, wFalloff: 0 });
+  s2.types.k.sensor = 0;
+  s2.units[7] = { type: 'e', side: 0, x: 2, y: 0 };
+  const D = runFor(s2, 120);
+  check('方舟: 沈むと積まれたままの艦も沈む', !D.units[0].alive && D.units.slice(1, 6).every((u) => !u.alive) && D.events.some((e) => e.kind === 'cargoLost'), D.units.slice(0, 6).map((u) => u.alive));
+}
+
+// ---- 旗艦: 動くハブ（進みながら後ろにレーンを敷く。網の味方はそばまで跳べる。妨害場で断たれ、沈むと消える）
+{
+  const hub = Object.assign(clone(T.generic), {
+    wDamage: 0, ai: 'assault', speed: 0.02, jump: 'lane', lockTime: 60, sensor: 0, hp: 1e6,
+    hubOn: true, hubSpeed: 0.025,
+  });
+  const narm = Object.assign(clone(T.narm), { wDamage: 0, ai: 'assault', sensor: 0, pdOn: false });
+  const foe = Object.assign(clone(T.generic), { wDamage: 0, ai: 'static', speed: 0, hp: 1e6, known: true });
+  const s0 = scn({ h: hub, n: narm, e: foe }, [
+    { type: 'h', side: 1, x: 0, y: 0, goal: [-60, 0] },
+    { type: 'n', side: 1, x: 100, y: 0, appear: 1800 },
+    { type: 'e', side: 0, x: -70, y: 0 },
+  ], { lanes: [{ side: 1, pts: [[0, 0], [100, 0]] }], settings: { spacing: 0 } });
+  const S = runFor(s0, 1500);
+  const hl = S.lanes.filter((l) => l.hub === 0 && !l.gone);
+  const tip = hl.length ? hl[0].pts[hl[0].pts.length - 1] : null;
+  check('動くハブ: 後ろにレーンを敷きながら進む（レーンの端は艦のところ）', tip && Math.hypot(tip.x - S.units[0].x, tip.y - S.units[0].y) < 0.6 && S.units[0].x < -25, { tip, x: S.units[0].x });
+  E.runUntil(S, 1830);
+  const n = S.units[1];
+  check('動くハブ: 網の味方はそばまでレーンで跳べる', n.present && Math.hypot(n.x - S.units[0].x, n.y - S.units[0].y) < 3, { n: [n.x, n.y], h: [S.units[0].x, S.units[0].y] });
+
+  // 妨害場が途中に掛かると断たれ、味方はそばまで跳べない
+  const q = Object.assign(clone(T.quiet), { wDamage: 0, fieldRadius: 8, fieldDeploy: 0, fieldMode: 'immediate', speed: 0, jump: 'none', hp: 1e6, known: false });
+  const s1 = clone(s0);
+  s1.types.q = q;
+  s1.units.push({ type: 'q', side: 0, x: -10, y: 0 });
+  const C = runFor(s1, 1830);
+  const n2 = C.units[1];
+  check('動くハブ: 妨害場が途中に掛かると、そばまで跳べない', n2.present && Math.hypot(n2.x - C.units[0].x, n2.y - C.units[0].y) > 20, { n: [n2.x, n2.y], h: [C.units[0].x, C.units[0].y] });
+
+  // 沈むと敷いたレーンが消える
+  const s2 = clone(s0);
+  s2.types.e = Object.assign(clone(foe), { wDamage: 1e7, wRange: 5, wInterval: 10, wAccuracy: 1, wFalloff: 0 });
+  s2.units[2] = { type: 'e', side: 0, x: -30, y: 0 };
+  s2.units[0].goal = [-40, 0];
+  const K = runFor(s2, 1700);
+  check('動くハブ: 沈むと、敷いたレーンが消える', !K.units[0].alive && K.lanes.filter((l) => l.hub === 0).every((l) => l.gone) && K.events.some((e) => e.kind === 'hubLost'), { alive: K.units[0].alive, lanes: K.lanes.map((l) => !!l.gone) });
+}
+
 // ---- 時間切れの判定
 {
   const g = clone(T.generic); g.wDamage = 0;

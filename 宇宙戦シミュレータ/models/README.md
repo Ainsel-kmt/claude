@@ -62,6 +62,6 @@ node tools/pack-models.js
 | quiet | 0.24 | | base | 2.0 |
 | picket | 0.11 | | base2 | 1.6 |
 | artillery | 0.2 | | missile | 0.18 |
-| carrier | 0.4 | | | |
+| carrier | 0.4 | | flagship | 2.6 |
 
 ここにない艦種は 0.16 × 表示の大きさ（動かない拠点は 1.5 ×）です。

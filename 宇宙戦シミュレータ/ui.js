@@ -269,12 +269,15 @@
     if (!app.sim) {
       const units = scn.units.map((u, i) => {
         const d = scn.types[u.type];
+        const ab = u.aboard != null && scn.units[u.aboard];
         return {
-          i, side: u.side, def: d, x: u.x, y: u.y, hp: 1, sh: 1,
-          fl: FL.alive | ((u.appear || 0) > 0 ? 0 : FL.present) | (u.locked ? FL.lock : 0),
+          i, side: u.side, def: d, x: ab ? ab.x : u.x, y: ab ? ab.y : u.y, hp: 1, sh: 1,
+          fl: FL.alive | (ab ? FL.aboard : ((u.appear || 0) > 0 ? 0 : FL.present)) | (u.locked ? FL.lock : 0),
           lockS: 0, lockF: u.locked ? 1 : 0, fieldV: 0, jx: 0, jy: 0, tgt: -1, goal: u.goal, appear: u.appear || 0,
+          aboard: ab ? u.aboard : -1, cargo: 0,
         };
       });
+      for (const u of units) if (u.aboard >= 0) units[u.aboard].cargo++;
       const fields = [], previews = [];
       for (const u of units) {
         const d = u.def;
@@ -289,13 +292,14 @@
     }
     const S = app.sim, f = S.frames[app.fi], a = f.u;
     const units = S.units.map((su, i) => {
-      const o = i * FW;
+      const o = i * FW, ab = S.scn.units[i].aboard;
       return {
         i, side: su.side, def: su.def, x: a[o], y: a[o + 1], hp: a[o + 2], sh: a[o + 3], fl: a[o + 4],
         lockS: a[o + 5], jx: a[o + 6], jy: a[o + 7], lockF: a[o + 8], fieldV: a[o + 9], ammo: a[o + 10], tgt: f.tg[i],
-        goal: S.scn.units[i].goal, appear: su.appear,
+        goal: S.scn.units[i].goal, appear: su.appear, aboard: ab != null ? ab : -1, cargo: 0,
       };
     });
+    for (const u of units) if ((u.fl & FL.aboard) && (u.fl & FL.alive) && u.aboard >= 0) units[u.aboard].cargo++;
     return { t: f.t, edit: false, units, fields: f.fields, previews: [], lanes: f.lanes, shots: f.shots, frame: f };
   }
 
@@ -502,7 +506,7 @@
     }
   }
 
-  // 射線: 主砲・ライン型・無人機は実線、シェルは点線、誘導弾は破線。迎撃は着いた位置の小さな ×
+  // 射線: 主砲・ライン型・無人機は実線、シェルは点線、誘導弾は破線、貫く線は太い実線。迎撃は着いた位置の小さな ×
   function drawShots(sc) {
     const s = sc.shots;
     if (!s) return;
@@ -511,6 +515,7 @@
       { kinds: [K.main, K.line, K.drone], dash: [] },
       { kinds: [K.shell], dash: [1.5, 3.5] },
       { kinds: [K.missile], dash: [6, 3] },
+      { kinds: [K.lance], dash: [], width: 3.5 },
     ];
     for (let side = 0; side < 2; side++) {
       const col = sideColor(side);
@@ -524,7 +529,7 @@
           }
           if (!any) continue;
           ctx.setLineDash(st.dash);
-          ctx.strokeStyle = rgba(col, hit ? 0.8 : 0.22); ctx.lineWidth = hit ? 1.3 : 1;
+          ctx.strokeStyle = rgba(col, hit ? 0.8 : 0.22); ctx.lineWidth = st.width ? (hit ? st.width : st.width * 0.6) : (hit ? 1.3 : 1);
           ctx.stroke();
         }
       }
@@ -608,6 +613,7 @@
         if (!(fl & FL.jump)) continue;
       }
       const d = u.def, r = unitR(d), col = sideColor(u.side);
+      if (fl & FL.aboard) continue;
       if (!(fl & FL.present)) {
         // 後から出現する艦
         pathShape(ctx, d.shape, x, y, r);
@@ -639,6 +645,20 @@
         ctx.beginPath();
         ctx.arc(x, y, r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(u.lockF, 0.02, 1));
         ctx.strokeStyle = C.ink2; ctx.lineWidth = 1.4; ctx.stroke();
+      }
+      // 貫く線: 溜めている間は破線の輪、溜め終わって待っているときは太い輪
+      if (fl & (FL.charge | FL.charged)) {
+        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = (fl & FL.charged) ? 2.4 : 1.4;
+        if (fl & FL.charge) ctx.setLineDash([3, 3]);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+      // 方舟: 積んでいる艦の数
+      if (u.cargo > 0) {
+        ctx.font = '10px ' + font; ctx.textBaseline = 'middle';
+        const tx = '積' + u.cargo;
+        ctx.lineWidth = 3; ctx.strokeStyle = C.board; ctx.strokeText(tx, x + r + 3, y + r);
+        ctx.fillStyle = C.ink2; ctx.fillText(tx, x + r + 3, y + r);
       }
       if (showBars && !sc.edit && (u.hp < 0.999 || u.sh < 0.999)) {
         const w = r * 2 + 4, bx = x - w / 2, by = y + r + 4;
@@ -795,6 +815,7 @@
     let best = -1, bd = Infinity;
     for (const u of sc.units) {
       if (!sc.edit && (!(u.fl & FL.alive) || (u.fl & FL.escaped))) continue;
+      if (u.fl & FL.aboard) continue;
       const d = Math.hypot(sx(u.x) - px, sy(u.y) - py);
       const lim = Math.max(7, unitR(u.def) + 3);
       if (d <= lim && d < bd) { bd = d; best = u.i; }
@@ -984,6 +1005,7 @@
         const sc = app.lastScene || scene();
         for (const u of sc.units) {
           if (!sc.edit && (!(u.fl & FL.alive) || (u.fl & FL.escaped))) continue;
+          if (u.fl & FL.aboard) continue;
           const px = sx(u.x), py = sy(u.y);
           if (px >= x0 && px <= x1 && py >= y0 && py <= y1) app.sel.add(u.i);
         }
@@ -1053,11 +1075,18 @@
     edit((s) => { s.lanes.push({ side: dr.side, pts }); app.selLane = s.lanes.length - 1; });
     toast(sideName(dr.side) + ' のレーンを追加しました');
   }
+  // 艦を消すときは、積まれる艦（aboard: 積む艦の番号）を付け直す。積む艦が消えたら積まない
+  function filterUnits(units, keep) {
+    const map = new Map(), out = [];
+    units.forEach((u, i) => { if (keep(u, i)) { map.set(i, out.length); out.push(u); } });
+    for (const u of out) if (u.aboard != null) { if (map.has(u.aboard)) u.aboard = map.get(u.aboard); else delete u.aboard; }
+    return out;
+  }
   function deleteSelection() {
     if (!needEdit()) return;
     if (app.sel.size) {
       const n = app.sel.size;
-      edit((s) => { s.units = s.units.filter((_, i) => !app.sel.has(i)); app.sel.clear(); });
+      edit((s) => { s.units = filterUnits(s.units, (_, i) => !app.sel.has(i)); app.sel.clear(); });
       toast(n + '隻を削除しました');
     } else if (app.selLane >= 0) {
       const li = app.selLane;
@@ -1115,6 +1144,7 @@
   }
   function unitStates(u, sc) {
     const st = [], fl = u.fl, d = u.def;
+    if ((fl & FL.aboard) && (fl & FL.alive)) { const c = sc.units[u.aboard]; st.push((c ? c.def.name + ' #' + (u.aboard + 1) : '方舟') + ' に積まれている'); return st; }
     if (!(fl & FL.present)) { st.push((sc.edit ? 'T+' + num(u.appear / 60, 1) + '分' : fmtT(u.appear)) + ' に出現'); return st; }
     if (!(fl & FL.alive)) {
       const su = app.sim && app.sim.units[u.i];
@@ -1129,6 +1159,10 @@
     if (fl & FL.retreat) st.push('撤退中');
     if (fl & FL.wait) st.push('ロック明けを待っている');
     if (fl & FL.resupply) st.push('弾の補充に戻っている');
+    if (fl & FL.charge) st.push('貫く線を溜めている（動けない）');
+    if (fl & FL.charged) st.push('貫く線を溜め終わり、撃つ向きを待っている');
+    if (fl & FL.hub) st.push('後ろにレーンを敷きながら進んでいる');
+    if (u.cargo > 0) st.push('積んでいる艦 ' + u.cargo + '隻');
     if (d.sOn && d.sAmmo > 0 && u.ammo >= 0) st.push('残弾 ' + u.ammo + ' / ' + Math.floor(d.sAmmo));
     if (fl & FL.lock) st.push((d.jump === 'lane' ? '再ジャンプまで' : 'ロックタイム残り') + ' ' + (u.lockS >= 60 ? num(u.lockS / 60, 0) + '分' : num(u.lockS, 0) + '秒'));
     if (fl & FL.linked) st.push(d.linkOn ? 'リンクの中枢' : 'リンク中');
@@ -1465,7 +1499,17 @@
       (mixed ? '<option value="__mixed" selected>（ばらばら）</option>' : '') +
       Object.entries(map).map(([k, v]) => '<option value="' + k + '"' + (!mixed && k === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
     const side = commonValue('side', 0), ai = commonValue('ai', ''), pr = commonValue('priority', ''), mv = commonValue('move', 'auto');
-    const rt = commonValue('retreatAt', null), ap = commonValue('appear', 0), lk = commonValue('locked', false);
+    const rt = commonValue('retreatAt', null), ap = commonValue('appear', 0), lk = commonValue('locked', false), ab = commonValue('aboard', '');
+    // 積まれる艦の候補: 選んだ艦と同じ陣営の方舟（選んだ艦の中の方舟と、方舟に積まれている艦は除く）
+    const arks = {};
+    scn.units.forEach((u, i) => {
+      const d = typeOf(u.type);
+      if (!d.hangarOn || app.sel.has(i) || u.aboard != null || side.mixed || u.side !== side.v) return;
+      const n = scn.units.filter((w) => w.aboard === i).length;
+      arks[i] = d.name + ' #' + (i + 1) + '（積荷 ' + n + ' / ' + Math.floor(d.hangarCap) + '）';
+    });
+    const selArk = [...app.sel].some((i) => scn.units[i] && typeOf(scn.units[i].type).hangarOn);
+    const cargoN = scn.units.filter((u) => u.aboard != null && app.sel.has(u.aboard)).length;
     let goals = 0;
     for (const i of app.sel) if (scn.units[i] && scn.units[i].goal) goals++;
     const sideMap = { 0: sideName(0), 1: sideName(1) };
@@ -1479,9 +1523,12 @@
       '<label for="selAp">出現時刻</label><div class="in"><input id="selAp" type="number" min="0" step="1" placeholder="' + (ap.mixed ? 'ばらばら' : '0') + '" value="' + (!ap.mixed ? num((ap.v || 0) / 60, 2) : '') + '"><span class="u">分後</span></div>' +
       '<label class="check"><input type="checkbox" id="selLock"' + (lk.v && !lk.mixed ? ' checked' : '') + '> ジャンプ直後（ロックタイム中）から始める</label>' +
       '<p class="help">出現時刻を入れると、その時刻にジャンプで到着する増援になります（任意座標ジャンプの艦はロックタイムも始まる）。</p>' +
+      (Object.keys(arks).length || ab.v !== '' || ab.mixed ? '<label for="selAb">積まれる艦</label><div class="in"><select id="selAb"' + (selArk ? ' disabled' : '') + '>' + opt(arks, String(ab.v != null ? ab.v : ''), ab.mixed, '積まない') + '</select></div>' +
+        '<p class="help">方舟（「艦を積んで運ぶ」がオンの艦種）に積むと、その艦が敵を見つけるまで戦場にいない扱いになり、一緒に動きます。積める数を超えた分は積まれません。</p>' : '') +
       '</div>' +
       '<div class="row" style="margin-top:8px"><span class="hint" style="margin:0">目標地点: ' + (goals ? goals + '隻に設定済み' : 'なし') + '</span></div>' +
-      '<div class="row"><button id="selGoal">目標地点を指定</button><button id="selGoalClr"' + (goals ? '' : ' disabled') + '>目標を解除</button><button id="selDel" class="danger">削除</button></div>';
+      '<div class="row"><button id="selGoal">目標地点を指定</button><button id="selGoalClr"' + (goals ? '' : ' disabled') + '>目標を解除</button><button id="selDel" class="danger">削除</button></div>' +
+      (cargoN ? '<div class="row"><button id="selUnload">積んでいる艦を降ろす（' + cargoN + '隻）</button></div>' : '');
     $('selLock').indeterminate = lk.mixed;
     const apply = (fn) => edit((s) => { for (const i of app.sel) if (s.units[i]) fn(s.units[i]); });
     $('selSide').onchange = (e) => { if (e.target.value !== '__mixed') apply((u) => { u.side = +e.target.value; }); };
@@ -1491,9 +1538,22 @@
     $('selRt').onchange = (e) => { const v = e.target.value.trim(); apply((u) => { if (v === '') delete u.retreatAt; else u.retreatAt = clamp(parseFloat(v) || 0, 0, 100) / 100; }); };
     $('selAp').onchange = (e) => { const v = e.target.value.trim(); apply((u) => { const m = parseFloat(v); if (v === '' || !(m > 0)) delete u.appear; else u.appear = Math.round(m * 60); }); };
     $('selLock').onchange = (e) => { const v = e.target.checked; apply((u) => { if (v) u.locked = true; else delete u.locked; }); };
+    if ($('selAb')) $('selAb').onchange = (e) => { const v = e.target.value; if (v !== '__mixed') apply((u) => { if (v === '') delete u.aboard; else u.aboard = +v; }); };
     $('selGoal').onclick = () => setTool('goal');
     $('selGoalClr').onclick = () => apply((u) => { delete u.goal; });
     $('selDel').onclick = deleteSelection;
+    // 方舟から降ろした艦は、方舟のまわりに並べる
+    if ($('selUnload')) $('selUnload').onclick = () => {
+      edit((s) => {
+        const by = new Map();
+        s.units.forEach((u) => { if (u.aboard != null && app.sel.has(u.aboard)) { if (!by.has(u.aboard)) by.set(u.aboard, []); by.get(u.aboard).push(u); } });
+        for (const [ci, list] of by) {
+          const c = s.units[ci];
+          P.formation(list.length, c.x + 3, c.y, 0.6, 'cluster').forEach((p, k) => { const u = list[k]; delete u.aboard; u.x = p[0]; u.y = p[1]; });
+        }
+      });
+      toast(cargoN + '隻を降ろしました');
+    };
   }
 
   function renderOrbat() {
@@ -1558,13 +1618,15 @@
       if (g.g === '副兵装' && E.hasSecondary(d)) {
         const n = Math.max(1, Math.floor(d.sMounts || 1));
         let t = '目安: ' + num(d.sInterval / 60, 1) + '分ごとに' + n + (d.sKind === 'drone' ? '機を発進' : '発') + '。';
-        if (d.sKind !== 'line') {
+        if (d.sKind === 'lance') {
+          t = '目安: ' + num(d.sCharge / 60, 1) + '分溜めて撃ち、撃ってから' + num(d.sInterval / 60, 1) + '分で次の溜めに入れる。射程' + num(d.sRange, 0) + '光秒（約' + fmtKm(d.sRange) + '）いっぱいまで伸びる太さ' + num(d.sWidth, 2) + '光秒の線の上にいる敵すべてに損害（味方は巻き込まない）。線の上に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上並ぶ向きにだけ撃つ。溜めている間は動けない。';
+        } else if (d.sKind !== 'line') {
           const fl = d.sRange / Math.max(1e-3, d.sSpeed);
           t += '射程いっぱいまで届くのに' + (fl < 120 ? num(fl, 0) + '秒' : num(fl / 60, 1) + '分') + '。';
           if (d.sKind === 'shell') t += '敵の群れの進む先を見越して撃ち込み、着いた点で爆発する（撃たれる側は気づかない。針路や速さを変えると外れる）。爆発の範囲に' + Math.max(1, Math.floor(d.sMinCount || 1)) + '隻以上入る群れにだけ撃つ。';
         }
         if (d.sBypass > 0) t += '損害の' + num(d.sBypass * 100, 0) + '%はウォードを素通りする。';
-        if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone') t += '爆発の半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の中の敵すべてに威力いっぱい。';
+        if (d.sBlast > 0 && d.sKind !== 'line' && d.sKind !== 'drone' && d.sKind !== 'lance') t += '爆発の半径' + num(d.sBlast, 2) + '光秒（約' + fmtKm(d.sBlast) + '）の中の敵すべてに威力いっぱい。';
         if (d.sAmmo > 0) {
           const rt = (scn.settings && scn.settings.resupplyTime) || E.DEFAULT_SETTINGS.resupplyTime;
           t += '弾は' + Math.floor(d.sAmmo) + '発（拠点の近くで1発' + num(rt / 60, 1) + '分ずつ補充' + (d.sReturn ? '。尽きたら補充に戻る' : '') + '）。';
@@ -1619,7 +1681,7 @@
       return;
     }
     app.delArm = null;
-    edit((s) => { delete s.types[id]; s.units = s.units.filter((u) => u.type !== id); app.sel.clear(); });
+    edit((s) => { delete s.types[id]; s.units = filterUnits(s.units, (u) => u.type !== id); app.sel.clear(); });
     toast('艦種を削除しました（元に戻すで戻せます）');
   };
 
@@ -1812,7 +1874,12 @@
       rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:1.3;stroke-dasharray:1.5 3"/>'), 'シェル（点線）']);
       if (typesNow.some((d) => d.sOn && d.sKind === 'missile')) rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:1.3;stroke-dasharray:5 2.5"/>'), '誘導弾（破線）']);
       if (typesNow.some((d) => d.sOn && d.sKind === 'drone')) rows.push([sym('<circle cx="8" cy="8" r="2" style="fill:var(--ink-2)"/>'), '無人機']);
+      if (typesNow.some((d) => d.sOn && d.sKind === 'lance')) {
+        rows.push([sym('<line x1="2" y1="13" x2="14" y2="3" style="stroke:var(--ink-2);stroke-width:3.5"/>'), '貫く線（太い線）']);
+        rows.push([sym('<circle cx="8" cy="8" r="6" style="fill:none;stroke:var(--ink-2);stroke-width:1.4;stroke-dasharray:3 3"/>'), '貫く線を溜めている（太い輪は溜め終わり）']);
+      }
     }
+    if (typesNow.some((d) => d.hangarOn)) rows.push(['<span style="font-size:10px;color:var(--ink-2)">積5</span>', '方舟が積んでいる艦の数']);
     if (typesNow.some((d) => d.pdOn)) rows.push([sym('<path d="M5 5 L11 11 M5 11 L11 5" style="stroke:var(--ink-2);stroke-width:1.2"/>'), '迎撃で落とした弾・無人機（小さな×）']);
     $('legend').innerHTML = rows.map((r) => '<span>' + r[0] + '</span><span>' + r[1] + '</span>').join('');
   }

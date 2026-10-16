@@ -25,7 +25,7 @@
     // 艦種ごとの既定の長さ（光秒）。実物（数km）よりはるかに大きく誇張している
     const BASE_LENGTH = {
       node: 0.3, guard: 0.16, comms: 0.18, quiet: 0.24, picket: 0.11, base: 2.0, base2: 1.6,
-      narm: 0.14, garmes: 0.45, elda: 0.26, generic: 0.16, artillery: 0.2, missile: 0.18, carrier: 0.4,
+      narm: 0.14, garmes: 0.45, elda: 0.26, generic: 0.16, artillery: 0.2, missile: 0.18, carrier: 0.4, flagship: 2.6,
     };
 
     // ---------------------------------------------------------------- 部品
@@ -110,6 +110,22 @@
         glow: [torus(0.06, 0.012, 16, { z: 0.62 }), torus(0.1, 0.01, 16, { z: 0.5 }), sph(0.025, { z: 0.62 }), box(0.18, 0.02, 0.02, { z: -0.4 })],
         white: [],
       }),
+      // ザイレンの巨大旗艦（オルドラ級）: 長い船体の両脇に格納庫（方舟）、艦首に輪の並ぶ長い砲身（攻城線砲）、
+      // 艦尾にレーンの錨の大きな輪（動くハブ）
+      flagship: () => design({
+        hull: [box(0.46, 0.26, 1.5), coneZ(0.26, 0.42, 4, { z: 0.96, rz: 45, s: [1, 1, 0.75] }), box(0.28, 0.14, 1.1, { y: -0.19, z: -0.05 }),
+          box(0.2, 0.3, 0.42, { y: 0.24, z: -0.38 })],
+        hull2: [box(0.2, 0.2, 0.95, { x: 0.36, z: -0.08 }), box(0.2, 0.2, 0.95, { x: -0.36, z: -0.08 }),
+          box(1.05, 0.03, 0.32, { z: -0.62 }), box(0.03, 0.42, 0.3, { y: 0.24, z: -0.66 }),
+          cylZ(0.035, 0.06, 1.05, 8, { z: 1.45 }), box(0.06, 0.06, 0.5, { y: -0.08, z: 1.05 }),
+          cylZ(0.3, 0.34, 0.08, 16, { z: -0.86 }), box(0.06, 0.6, 0.06, { z: -0.86 }), box(0.6, 0.06, 0.06, { z: -0.86 })],
+        glow: [box(0.01, 0.035, 0.8, { x: 0.465, z: -0.08 }), box(0.01, 0.035, 0.8, { x: -0.465, z: -0.08 }),
+          box(0.02, 0.01, 0.8, { x: 0.36, y: 0.105, z: -0.08 }), box(0.02, 0.01, 0.8, { x: -0.36, y: 0.105, z: -0.08 }),
+          torus(0.1, 0.01, 16, { z: 1.25 }), torus(0.13, 0.01, 16, { z: 1.5 }), torus(0.16, 0.01, 16, { z: 1.75 }), sph(0.035, { z: 1.98 }),
+          torus(0.42, 0.012, 40, { z: -0.92 }),
+          box(0.24, 0.03, 0.02, { y: -0.19, z: -0.6 })],
+        white: [sph(0.02, { y: 0.4, z: -0.38 }), sph(0.016, { x: 0.36, y: 0.11, z: 0.4 }), sph(0.016, { x: -0.36, y: 0.11, z: 0.4 })],
+      }),
       // 形からの汎用
       circle: () => design({ hull: [sph(0.3, { s: [0.7, 0.55, 1] })], hull2: [], glow: [cylZ(0.05, 0.05, 0.04, 8, { z: -0.3 })], white: [] }),
       diamond: () => design({ hull: [octa(0.35, { s: [0.6, 0.45, 1.3] })], hull2: [], glow: [sph(0.04, { z: -0.44 })], white: [] }),
@@ -120,7 +136,7 @@
     };
 
     const designKey = (tid, def) => (DESIGNS[tid] ? tid : tid === 'base2' ? 'base' : (DESIGNS[def.shape] ? def.shape : 'circle'));
-    const isAlien = (key, def) => ['narm', 'garmes', 'elda'].includes(key) || (!DESIGNS[key] && def.jump === 'lane');
+    const isAlien = (key, def) => ['narm', 'garmes', 'elda', 'flagship'].includes(key) || (!DESIGNS[key] && def.jump === 'lane');
 
     function materialsFor(key, def, side) {
       const alien = isAlien(key, def);

@@ -121,6 +121,21 @@
       sOn: true, sKind: 'drone', sDamage: 10, sRange: 20, sInterval: 300, sAccuracy: 0.8, sFalloff: 0, sMounts: 4, sSpeed: 0.08, sBypass: 0, sLife: 15 * M,
       pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
     },
+    // ザイレンの巨大旗艦（2026-10-16 に追加。設定資料にはない、シミュレータだけの艦種。級名・数値は仮置き）。
+    // 動くハブ（進みながら後ろにレーンを敷き、網の味方がそばまで跳べる）・攻城線砲（10分溜めて、線の上の敵すべてを貫く）・
+    // 方舟（ナーム級を積んで運び、敵を見つけたら30秒ごとに2隻ずつ出す）をひとつにまとめた。大きさは拠点くらい
+    flagship: {
+      name: 'オルドラ級', abbr: 'オ', shape: 'hexagon', size: 2.6, cost: 30, origin: 1,
+      hp: 6000, shield: 4000, shieldRegen: 3, evasion: 0,
+      wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 8,
+      speed: 0.02, sensor: 40, jump: 'lane', lockTime: 60,
+      ai: 'hold', priority: 'nearest', retreatAt: 0,
+      pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
+      sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
+      sAmmo: 0, sMinCount: 3, sCharge: 10 * M, sWidth: 0.3,
+      hubOn: true, hubSpeed: 60 / (40 * M),
+      hangarOn: true, hangarCap: 40, hangarInterval: 30, hangarBatch: 2,
+    },
     generic: {
       name: '汎用艦', abbr: '汎', shape: 'circle', size: 1, cost: 1, origin: 0,
       hp: 300, shield: 0, shieldRegen: 0, evasion: 0,
@@ -170,7 +185,8 @@
     for (const id of ids) o[id] = JSON.parse(JSON.stringify(TYPES[id]));
     return o;
   };
-  const ALL = Object.keys(TYPES).filter((k) => k !== 'generic');
+  // 旗艦（flagship）は「巨大艦の試し」だけで使う（ほかのプリセットに艦種を足すと、狙い方の基準が変わって結果が動くため）
+  const ALL = Object.keys(TYPES).filter((k) => k !== 'generic' && k !== 'flagship');
 
   // ---------------------------------------------------------------- シナリオ
 
@@ -397,6 +413,58 @@
     };
   }
 
+  // 巨大艦の試し: ザイレンの旗艦（オルドラ級）の3つのしくみを見るための場面
+  function giantDemo() {
+    const B = [0, 0], M = [65, 0], H2 = [200, 0], H3 = [320, 40], GOAL = [95, 0], CUT = [160, 16];
+    const types = pick(ALL.concat(['flagship']));
+    types.base.fieldRadius = 50;
+    types.quiet.fieldRadius = 30;
+    const cut = { appear: 70 * M_, locked: true };
+    const units = [].concat(
+      // 人類: 拠点と守備隊、前に出た主力
+      [{ type: 'base', side: 0, x: B[0], y: B[1] }],
+      group('guard', 0, 8, B[0], B[1], 1.5, 'ring', { ai: 'hold' }),
+      group('node', 0, 3, M[0], M[1], 1.5, 'line'),
+      group('guard', 0, 30, M[0] - 2, M[1], 0.5, 'cluster'),
+      group('comms', 0, 1, M[0] - 6, M[1], 1, 'cluster'),
+      group('artillery', 0, 2, M[0] - 9, M[1], 1, 'line'),
+      group('missile', 0, 2, M[0] - 12, M[1], 1.2, 'line'),
+      // 人類: 旗艦の引くレーンを断ちにくる静穏場艦と護衛（T+70分）
+      group('quiet', 0, 1, CUT[0], CUT[1], 1, 'cluster', cut),
+      group('guard', 0, 8, CUT[0] - 1, CUT[1] + 1, 0.6, 'cluster', cut),
+    );
+    // ザイレン: 旗艦（ナーム級30を積む）と、付き添うガルメス級
+    const fi = units.length;
+    units.push({ type: 'flagship', side: 1, x: H2[0], y: H2[1], goal: [GOAL[0], GOAL[1]] });
+    units.push(...group('narm', 1, 30, H2[0], H2[1], 0.6, 'cluster', { aboard: fi }));
+    units.push(...group('garmes', 1, 2, H2[0] + 2, H2[1], 2, 'line', { ai: 'escort' }));
+    // ザイレン: 後方のハブH3に着く予備。旗艦のそばまでレーンで跳んでくる
+    units.push(...group('narm', 1, 40, H3[0], H3[1], 0.6, 'cluster', { appear: 50 * M_ }));
+    return {
+      name: '巨大艦の試し',
+      note: 'ザイレンの旗艦（オルドラ級。シミュレータだけの仮の艦種）の3つのしくみを見る場面。旗艦はH2から人類の主力へ向かって進みながら、後ろにレーンを敷く（動くハブ）。T+50分に後方のハブH3に着く予備（ナーム級40）は、そのレーンで旗艦のそばまで跳んでくる。旗艦は積んできたナーム級30を、敵を見つけると30秒ごとに2隻ずつ出す（方舟）。人類の主力が30光秒に入ると、10分溜めて、線の上に並ぶ敵すべてを貫く（攻城線砲）。人類はT+70分に静穏場艦を旗艦のレーンの途中へ送り、妨害場でレーンを断つ。旗艦が沈むと、旗艦が敷いたレーンは消え、積まれたままの艦も沈む。数値は仮置き。',
+      settings: { timeLimit: 4 * H },
+      sides: [
+        { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
+        { name: 'ザイレン', color: 'orange', reaction: 10 * M_, sharing: 'always', retreatBelow: 0.25 },
+      ],
+      types,
+      units,
+      lanes: [
+        { side: 1, pts: [H2, H3] },
+        { side: 1, pts: [H2, [260, -90]] },
+      ],
+      marks: [
+        { x: B[0], y: B[1] + 4, text: '人類拠点' },
+        { x: M[0], y: M[1] - 6, text: '人類主力' },
+        { x: H2[0] + 6, y: H2[1] + 4, text: 'H2（旗艦の出発点）' },
+        { x: H3[0], y: H3[1] + 4, text: 'H3（予備。T+50分）' },
+        { x: GOAL[0], y: GOAL[1] + 6, text: '旗艦の目標' },
+        { x: CUT[0], y: CUT[1] + 6, text: 'レーンを断つ地点（T+70分）' },
+      ],
+    };
+  }
+
   const SCENARIOS = [
     { id: 'basic', label: '正面衝突', make: basic },
     { id: 'sA', label: 'S星系外縁 A（後続が後方）', make: () => sSystem('A') },
@@ -404,6 +472,7 @@
     { id: 'grand', label: '大規模会戦: S星系決戦', make: grandBattle },
     { id: 'lan', label: '数の差の確認（同性能 20 対 30）', make: lanchester },
     { id: 'arms', label: '副兵装の試し撃ち', make: armsDemo },
+    { id: 'giant', label: '巨大艦の試し', make: giantDemo },
     { id: 'empty', label: '空のマップ', make: empty },
   ];
 

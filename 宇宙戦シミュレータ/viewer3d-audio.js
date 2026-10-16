@@ -20,6 +20,7 @@
     const REV = {
       beam: 0.35, death: 0.55, deathBig: 0.75, shellLaunch: 0.55, shellBoom: 0.85, jumpOut: 0.7, jumpIn: 0.6,
       lane: 0.45, fieldUp: 0.8, fieldDown: 0.7, missile: 0.4, intercept: 0.35, drone: 0.25,
+      lanceCharge: 0.6, lanceFire: 0.9, launch: 0.4,
     };
 
     // ---- 下ごしらえ（雑音・残響・歪みの形）
@@ -94,7 +95,7 @@
       const glue = ctx.createDynamicsCompressor();
       glue.threshold.value = -20; glue.knee.value = 12; glue.ratio.value = 3; glue.attack.value = 0.012; glue.release.value = 0.35;
       const makeup = ctx.createGain();
-      makeup.gain.value = 1.5;
+      makeup.gain.value = 1.35;
       const lim = ctx.createDynamicsCompressor();
       lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.15;
       A.master.connect(shelf); shelf.connect(glue); glue.connect(makeup); makeup.connect(lim);
@@ -402,6 +403,53 @@
         noise(t, 0.3, filter('lowpass', 900, 200, t, 0.3, 0.7, gainNode(t, 0.003, 0.2, 0.3, out)), 'brown');
         crackle(t + 0.02, 0.3, 4, 0.12, out);
         return 0.45;
+      },
+      // 貫く線の溜め（ザイレンの旗艦）: 低い唸りが共鳴しながら高まり、電気のはぜる音が増えていく
+      lanceCharge(t, out) {
+        const D = 3.6;
+        const g = A.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.3, t + D - 0.5);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + D);
+        g.connect(out);
+        const lp = filter('lowpass', 140, 1700, t, D - 0.4, 7, g);
+        const sh = shaper(2.4, lp);
+        const c1 = osc('sawtooth', 38, 76, t, D, sh, -9), c2 = osc('sawtooth', 38.4, 76.8, t, D, sh, 9);
+        lfo(4, 16, 3, t, D, c1.frequency); lfo(5, 18, 3, t, D, c2.frequency);
+        osc('sine', 190, 880, t, D, gainNode(t, D - 0.6, 0.05, 0.5, out));
+        osc('sine', 38, 76, t, D, gainNode(t, D - 0.6, 0.45, 0.5, out));
+        crackle(t + D * 0.45, D * 0.55, 18, 0.1, out, 2000, 7000);
+        return D;
+      },
+      // 貫く線の発射: 空気が裂けるような割れ、唸り続ける太い光の轟音、腹に来る衝撃、長い残響
+      lanceFire(t, out) {
+        noise(t, 0.12, filter('highpass', 700, 500, t, 0.12, 0.7, shaper(5, gainNode(t, 0.001, 0.55, 0.12, out))));
+        osc('sine', 85, 18, t, 2.2, shaper(2.2, gainNode(t, 0.003, 1.0, 2.2, out)));
+        // 光の轟音: 低いのこぎり波と雑音を速く震わせる
+        const D = 2.6;
+        const rg = gainNode(t + 0.02, 0.03, 0.55, D, out);
+        const trem = A.ctx.createGain();
+        trem.gain.value = 1;
+        lfo(32, 20, 0.4, t, D + 0.1, trem.gain);
+        trem.connect(rg);
+        const lp = filter('lowpass', 2600, 300, t, D, 2, trem);
+        const sh = shaper(3, lp);
+        osc('sawtooth', 55, 41, t, D, sh, -12); osc('sawtooth', 55.6, 41.5, t, D, sh, 12);
+        noise(t, D, filter('bandpass', 420, 180, t, D, 1.4, trem), 'brown', true);
+        // 焼けるような高い音（短く）
+        noise(t, 1.2, filter('highpass', 3500, 2000, t, 1.2, 0.7, gainNode(t, 0.01, 0.09, 1.1, out)), 'pink', true);
+        // 長い地鳴り
+        noise(t + 0.1, 4.5, filter('lowpass', 160, 80, t + 0.1, 4.5, 0.6, gainNode(t + 0.1, 0.4, 0.5, 4.2, out)), 'brown', true);
+        crackle(t + 0.05, 1.8, 14, 0.14, out);
+        return 5;
+      },
+      // 方舟からの発艦: 留め具の外れる金属音と、短い噴射
+      launch(t, out) {
+        noise(t, 0.06, filter('bandpass', 700, 600, t, 0.06, 7, gainNode(t, 0.002, 0.55, 0.06, out)));
+        osc('sine', 150, 85, t, 0.16, shaper(1.6, gainNode(t, 0.002, 0.5, 0.16, out)));
+        noise(t + 0.08, 0.6, filter('bandpass', 350, 1100, t + 0.08, 0.6, 1.2, gainNode(t + 0.08, 0.06, 0.3, 0.5, out)), 'pink', true);
+        noise(t + 0.08, 0.6, filter('lowpass', 500, 200, t + 0.08, 0.6, 0.7, gainNode(t + 0.08, 0.05, 0.3, 0.5, out)), 'brown');
+        return 0.9;
       },
       // 無人機の射撃: 低めの短い連射「ドドド」
       drone(t, out, o) {

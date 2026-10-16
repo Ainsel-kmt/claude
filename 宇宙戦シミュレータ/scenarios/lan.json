@@ -90,10 +90,18 @@
    "sReturn": false,
    "sMinHit": 0,
    "sMinCount": 1,
+   "sCharge": 600,
+   "sWidth": 0.3,
    "pdOn": false,
    "pdRange": 1,
    "pdChance": 0.3,
-   "pdInterval": 10
+   "pdInterval": 10,
+   "hubOn": false,
+   "hubSpeed": 0.025,
+   "hangarOn": false,
+   "hangarCap": 40,
+   "hangarInterval": 30,
+   "hangarBatch": 2
   }
  },
  "units": [

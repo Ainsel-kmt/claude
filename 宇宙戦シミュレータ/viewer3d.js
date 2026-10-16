@@ -197,19 +197,32 @@
     // 射撃（時刻順）。シェルと誘導弾は飛んでいる様子を見せるので R.proj に分ける（着弾の時刻順）
     const K = E.SHOT_KIND;
     const isProj = (k) => k === K.shell || k === K.missile;
+    const add = (e) => R.flashes.push(e);
     let nS = 0, nP = 0;
-    for (const f of F) if (f.shots) for (let i = 0; i < f.shots.length; i += SW) { if (isProj(f.shots[i + 9])) nP++; else nS++; }
+    for (const f of F) if (f.shots) for (let i = 0; i < f.shots.length; i += SW) { const k = f.shots[i + 9]; if (isProj(k)) nP++; else if (k !== K.lance) nS++; }
     R.shots = new Float32Array(nS * SW); R.proj = new Float32Array(nP * SW);
     let oS = 0, oP = 0;
     R.maxFlight = 0;
     for (const f of F) if (f.shots) for (let i = 0; i < f.shots.length; i += SW) {
       const row = f.shots.subarray(i, i + SW);
       if (isProj(row[9])) { R.proj.set(row, oP); oP += SW; R.maxFlight = Math.max(R.maxFlight, row[10]); }
+      else if (row[9] === K.lance) add({ kind: 'lance', t: row[6], i: row[7], x: row[0], y: row[1], tx: row[2], ty: row[3], tg: row[8], hit: row[4], killed: row[11] });
       else { R.shots.set(row, oS); oS += SW; }
     }
     R.nShots = nS; R.nProj = nP;
+    // 貫く線の溜め: 艦ごとに、溜めている区間（記録のフラグから）
+    R.charges = [];
+    S.units.forEach((u, i) => {
+      if (!(u.def.sOn && u.def.sKind === 'lance')) return;
+      let t0 = -1;
+      for (let k = 0; k < F.length; k++) {
+        const on = F[k].u[i * FW + 4] & FL.charge;
+        if (on && t0 < 0) { t0 = F[k].t; add({ kind: 'charge', t: t0, i, x: F[k].u[i * FW], y: F[k].u[i * FW + 1] }); }
+        else if (!on && t0 >= 0) { R.charges.push({ i, t0, t1: F[k].t, d: u.def }); t0 = -1; }
+      }
+      if (t0 >= 0) R.charges.push({ i, t0, t1: Infinity, d: u.def });
+    });
     // 状態の変わり目から演出の出来事を作る
-    const add = (e) => R.flashes.push(e);
     const maxMove = (u, dt) => u.def.speed * dt * 1.6 + 0.6;
     for (let k = 1; k < F.length; k++) {
       const f0 = F[k - 1], f1 = F[k], dt = f1.t - f0.t;
@@ -222,7 +235,12 @@
           if (a & FL.field) add({ kind: 'fieldDown', t: f1.t, i, x: x1, y: y1, r: u.def.fieldRadius });
         }
         if (!(b & FL.alive)) continue;
-        if (!(a & FL.present) && (b & FL.present)) add({ kind: 'arrive', t: u.appear || f1.t, i, x: x1, y: y1, lane: u.def.jump !== 'free' });
+        if (!(a & FL.present) && (b & FL.present)) {
+          // 方舟に積まれていた艦は、ジャンプではなく母艦から出てくる
+          const ab = S.scn.units[i] ? S.scn.units[i].aboard : null;
+          if (ab != null) add({ kind: 'launch', t: f1.t, i, ci: ab, x: x1, y: y1 });
+          else add({ kind: 'arrive', t: u.appear || f1.t, i, x: x1, y: y1, lane: u.def.jump !== 'free' });
+        }
         if (!(a & FL.jump) && (b & FL.jump)) {
           add({ kind: (b & FL.laneJump) ? 'laneDepart' : 'depart', t: f1.t - Math.min(dt, S.set.dt), i, x: x1, y: y1, tx: f1.u[o0 + 6], ty: f1.u[o0 + 7] });
         }
@@ -239,7 +257,8 @@
     }
     R.flashes.sort((p, q) => p.t - q.t);
     // 字幕: 主な出来事（撃沈は要艦・大型艦だけ）
-    const KEYKIND = { arrive: 1, appear: 1, fieldStart: 1, fieldUp: 1, fieldFail: 1, fieldDown: 1, layStart: 1, layEnd: 1, layStop: 1, commsDown: 1, commsUp: 1, retreatAll: 1, relief: 1, stationLost: 1, end: 1 };
+    const KEYKIND = { arrive: 1, appear: 1, fieldStart: 1, fieldUp: 1, fieldFail: 1, fieldDown: 1, layStart: 1, layEnd: 1, layStop: 1, commsDown: 1, commsUp: 1, retreatAll: 1, relief: 1, stationLost: 1,
+      hangarOpen: 1, hangarEmpty: 1, cargoLost: 1, hubLost: 1, lanceFire: 1, end: 1 };
     const bigType = (name) => Object.values(S.scn.types).some((t) => t.name && name.indexOf(t.name) >= 0 && (E.isKey(t) || t.cost >= 8));
     for (const e of S.events) {
       if (e.minor) continue;
@@ -269,7 +288,7 @@
   // ---------------------------------------------------------------- 描画の土台
 
   let renderer, scene, camera, composer, bloomPass, filmPass, controls;
-  const world = { batches: [], fieldMeshes: [], laneGroup: null, laneKey: '', unitState: [], spheres: [], tags: [] };
+  const world = { batches: [], fieldMeshes: [], laneGroup: null, laneKey: '', unitState: [], spheres: [], tags: [], lances: [] };
 
   function initRenderer() {
     const stage = $('stage');
@@ -466,6 +485,8 @@
     for (const sp of world.spheres || []) { scene.remove(sp.mesh); sp.mat.dispose(); }
     if (world.ring) { scene.remove(world.ring); world.ring.geometry.dispose(); world.ring = null; }
     world.spheres = [];
+    for (const m of world.lances) { scene.remove(m); m.material.dispose(); }
+    world.lances = [];
     world.tags = [];
     $('labels').innerHTML = '';
   }
@@ -672,6 +693,20 @@
       transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     });
   }
+  function lanceMaterial() {
+    return new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(1, 1, 1) }, opacity: { value: 1 } },
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: [
+        'uniform vec3 color; uniform float opacity; varying vec3 vN; varying vec3 vV;',
+        'void main(){',
+        '  float f = abs(dot(normalize(vN), normalize(vV)));',
+        '  float a = pow(f, 1.6) * opacity;',
+        '  gl_FragColor = vec4(color * (0.5 + f * 1.2), a);',
+        '}'].join('\n'),
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    });
+  }
   function fieldMaterial() {
     return new THREE.ShaderMaterial({
       uniforms: { color: { value: new THREE.Color(0.18, 0.82, 0.6) }, time: { value: 0 }, opacity: { value: 1 }, pulse: { value: 0 } },
@@ -851,9 +886,100 @@
   const C = (r, g, b) => new THREE.Color(r, g, b);
   const hashf = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
+  // 艦首の位置（艦の向きに沿って前へ半分）
+  function bowOf(i, st) {
+    const u = V.R.S.units[i], len = V.models.defaultLength(u.tid, u.def) * V.opts.shipScale;
+    tmpV2.set(0, 0, 0.5 * len).applyQuaternion(st.q);
+    return { x: st.pos.x + tmpV2.x, y: st.pos.y + tmpV2.y, z: st.pos.z + tmpV2.z, len };
+  }
+
+  // 貫く線: 太い光の筒（外の淡い光と、白く熱い芯）が射程いっぱいまで一気に伸び、ゆっくり消える。
+  // 線の上の敵には火花、主に狙った艦の上に戦果の札。p は演出の進み（0〜1）
+  let nLance = 0;
+  const LANCE_UP = 0.05;
+  let LANCE_CORE = null;
+  function lanceBeam(e, k, p, len) {
+    const R = V.R, off = world.off, H = V.opts.height, u = R.S.units[e.i];
+    if (!u) return;
+    const W = Math.max(0.05, u.def.sWidth), Lr = u.def.sRange;
+    const sx = e.x + off[e.i * 2], sz = e.y + off[e.i * 2 + 1], sy = R.h[e.i] * H;
+    // 高さは見た目だけなので、主に狙った艦の高さを通るように傾ける
+    let dy = 0;
+    if (e.tg >= 0) {
+      const tgx = R.S.units[e.tg] ? 1 : 0;
+      if (tgx) {
+        const fa = frameAt(e.t), o = e.tg * FW, f = R.F[fa.k];
+        const dd = Math.hypot(f.u[o] - e.x, f.u[o + 1] - e.y);
+        if (dd > 0.5) dy = (R.h[e.tg] * H - sy) / dd * Lr;
+      }
+    }
+    const ex = e.tx + (sx - e.x), ez = e.ty + (sz - e.y), ey = sy + dy;
+    const grow = clamp(p / LANCE_UP, 0, 1);
+    const hx = lerp(sx, ex, grow), hy = lerp(sy, ey, grow), hz = lerp(sz, ez, grow);
+    const a = p < LANCE_UP ? 1 : Math.pow(1 - (p - LANCE_UP) / (1 - LANCE_UP), 1.6);
+    const c = R.S.units[e.i].side === 0 ? COL.jumpH : COL.jumpZ;
+    tmpV.set(hx - sx, hy - sy, hz - sz);
+    const L = tmpV.length();
+    if (!LANCE_CORE) LANCE_CORE = new THREE.Color(1.5, 1.25, 1.0);
+    if (L > 1e-3) {
+      const tube = (r, col, op) => {
+        if (nLance >= world.lances.length) {
+          const m = new THREE.Mesh(world.lanceGeo || (world.lanceGeo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5)), lanceMaterial());
+          m.renderOrder = 5; m.frustumCulled = false;
+          scene.add(m);
+          world.lances.push(m);
+        }
+        const m = world.lances[nLance++];
+        m.visible = true;
+        m.position.set(sx, sy, sz);
+        m.lookAt(hx, hy, hz);
+        m.scale.set(r, r, L);
+        m.material.uniforms.color.value.copy(col);
+        m.material.uniforms.opacity.value = op;
+      };
+      tube(W * 1.2 * (1 - 0.4 * p), c, 0.3 * a);
+      tube(W * 0.25 * (1 - 0.5 * p), LANCE_CORE, 0.6 * a);
+    }
+    // 撃った艦首の閃光と輪
+    if (p < 0.3) {
+      const q = 1 - p / 0.3;
+      sprite('flare', sx, sy, sz, Math.max(len * 0.7, 0.8) * (0.6 + q * 0.6), c, q * 0.8);
+      sprite('ring', sx, sy, sz, Math.max(len * 0.8, 0.8) * (0.5 + (1 - q) * 2.5), COL.shock, q * 0.45);
+    }
+    // 線の上の敵（撃った時刻のフレームで、線の太さの中にいた艦）に火花
+    if (p < 0.4 && grow >= 1) {
+      const fa = frameAt(e.t), f = R.F[fa.k], dx = (e.tx - e.x) / Lr, dz = (e.ty - e.y) / Lr;
+      let n = 0;
+      for (let j = 0; j < R.n && n < 24; j++) {
+        const w = R.S.units[j];
+        if (!w || w.side === u.side) continue;
+        const o = j * FW, fl = f.u[o + 4];
+        if (!(fl & FL.present) || (fl & FL.escaped) || (fl & FL.jump) || (fl & FL.aboard)) continue;
+        const rx = f.u[o] - e.x, rz = f.u[o + 1] - e.y, along = rx * dx + rz * dz;
+        if (along < 0 || along > Lr || Math.abs(rx * dz - rz * dx) > W / 2 + 0.15) continue;
+        const st = world.unitState[j];
+        const px = st && st.vis ? st.pos.x : f.u[o] + off[j * 2], pz = st && st.vis ? st.pos.z : f.u[o + 1] + off[j * 2 + 1], py = R.h[j] * H;
+        const q = 1 - p / 0.4;
+        sprite('spark', px, py, pz, 0.6 * q + 0.2, COL.spark, q, hashf(k, j) * 6);
+        n++;
+      }
+    }
+    // 戦果の札（主に狙った艦の上）
+    if (e.tg >= 0 && p < 0.6 && grow >= 1) {
+      const dmg = Math.max(0, e.hit - e.killed);
+      const text = e.hit > 0 ? (e.killed > 0 ? '撃沈 ' + e.killed : '') + (dmg > 0 ? (e.killed > 0 ? '・' : '') + '損傷 ' + dmg : '') : '外れ';
+      const st = world.unitState[e.tg];
+      const fa = frameAt(e.t), f = R.F[fa.k], o = e.tg * FW;
+      const px = st && st.vis ? st.pos.x : f.u[o] + off[e.tg * 2], pz = st && st.vis ? st.pos.z : f.u[o + 1] + off[e.tg * 2 + 1];
+      world.lanceTag = { x: px, y: R.h[e.tg] * H + 1, z: pz, text, hit: e.hit > 0, a: Math.min(1, 2.5 * (1 - p / 0.6)) };
+    }
+  }
+
   function updateEffects(fa) {
     const R = V.R, vt = V.vt, off = world.off, K = E.SHOT_KIND;
     spriteN = 0;
+    nLance = 0;
+    world.lanceTag = null;
     // 射線
     let nb = 0;
     const bp = fx.beams.geometry.attributes.position.array, bc = fx.beams.geometry.attributes.color.array;
@@ -1172,6 +1298,24 @@
           fx.beams.geometry.setDrawRange(0, nb * 2);
           sprite('flare', e.tx, y, e.ty, Math.max(len * 5, 1) * p, COL.jumpZ, (1 - p) * 0.8);
         }
+      } else if (e.kind === 'lance') {
+        const dur = simDur(30, 2.4), p = age / dur;
+        if (p > 1 || !V.opts.beams) continue;
+        lanceBeam(e, k, p, len);
+      } else if (e.kind === 'launch') {
+        // 方舟から出た艦: 母艦からの短い光の筋と、出た艦の小さな閃光
+        const dur = simDur(5, 0.8), p = age / dur;
+        if (p > 1) continue;
+        sprite('flare', ex, y, ey, Math.max(len * 5, 0.5) * (1 - p * 0.5), COL.jumpZ, (1 - p) * 0.7);
+        const cs = world.unitState[e.ci];
+        if (cs && cs.vis && nb < MAX_BEAM) {
+          const p6 = nb * 6, a = (1 - p) * 1.2;
+          bp[p6] = cs.pos.x; bp[p6 + 1] = cs.pos.y; bp[p6 + 2] = cs.pos.z; bp[p6 + 3] = ex; bp[p6 + 4] = y; bp[p6 + 5] = ey;
+          bc[p6] = COL.jumpZ.r * a * 0.2; bc[p6 + 1] = COL.jumpZ.g * a * 0.2; bc[p6 + 2] = COL.jumpZ.b * a * 0.2;
+          bc[p6 + 3] = COL.jumpZ.r * a; bc[p6 + 4] = COL.jumpZ.g * a; bc[p6 + 5] = COL.jumpZ.b * a;
+          nb++;
+          fx.beams.geometry.setDrawRange(0, nb * 2);
+        }
       } else if (e.kind === 'fieldUp' || e.kind === 'fieldDown') {
         const dur = simDur(20, 2.2), p = age / dur;
         if (p > 1 || !V.opts.fields) continue;
@@ -1180,11 +1324,47 @@
         if (e.kind === 'fieldDown') sprite('flare', e.x, 0, e.y, Math.max(len * 10, 3) * (1 - p), COL.field, 1 - p);
       }
     }
+    if (world.lanceTag) { const g = world.lanceTag; useTag(g.x, g.y, g.z, g.text, g.hit, g.a); }
     fx.debris.geometry.setDrawRange(0, nd);
     fx.debris.geometry.attributes.position.needsUpdate = true;
     fx.debris.geometry.attributes.gcolor.needsUpdate = true;
     fx.debris.geometry.attributes.gsize.needsUpdate = true;
     fx.debris.material.uniforms.scale.value = 1;
+
+    // 貫く線の溜め: 艦首に光が集まり、輪が縮んでいく。溜め終わって待っている艦は艦首が光り続ける
+    {
+      const f0 = R.F[fa.k];
+      for (const c of R.charges) {
+        if (vt < c.t0 || vt >= c.t1) continue;
+        const st = world.unitState[c.i];
+        if (!st || !st.vis) continue;
+        const b = bowOf(c.i, st), p = clamp((vt - c.t0) / Math.max(1, c.d.sCharge), 0, 1);
+        const fl = 0.85 + 0.15 * Math.sin(V.realT * 23 + c.i);
+        sprite('flare', b.x, b.y, b.z, b.len * (0.08 + 0.3 * p), COL.jumpZ, (0.25 + 0.45 * p) * fl);
+        for (let r = 0; r < 2; r++) {
+          const ph = (V.realT * (0.6 + 0.6 * p) + r * 0.5) % 1;
+          sprite('ring', b.x, b.y, b.z, b.len * (0.1 + 0.6 * (1 - ph)), COL.jumpZ, ph * (0.1 + 0.25 * p));
+        }
+      }
+      for (const bt of world.batches) {
+        const d = bt.def;
+        if (!(d.sOn && d.sKind === 'lance') && !d.hubOn) continue;
+        for (const i of bt.shown) {
+          const fl = f0.u[i * FW + 4], st = world.unitState[i];
+          if (fl & FL.charged) {
+            const b = bowOf(i, st);
+            sprite('flare', b.x, b.y, b.z, b.len * (0.3 + 0.04 * Math.sin(V.realT * 6 + i)), COL.jumpZ, 0.6);
+          }
+          // 動くハブ: 艦尾のレーンの錨がゆっくり脈打つ
+          if ((fl & FL.hub) && V.opts.lanes) {
+            const len = bt.model.length * V.opts.shipScale;
+            tmpV2.set(0, 0, -0.45 * len).applyQuaternion(st.q);
+            sprite('ring', st.pos.x + tmpV2.x, st.pos.y + tmpV2.y, st.pos.z + tmpV2.z, len * (0.42 + 0.04 * Math.sin(V.realT * 2.2 + i)), COL.jumpZ, 0.1 + 0.05 * Math.sin(V.realT * 2.2 + i));
+          }
+        }
+      }
+    }
+    for (let k = nLance; k < world.lances.length; k++) world.lances[k].visible = false;
 
     // ロックタイムの輪
     if (V.opts.locks) {
@@ -1210,6 +1390,7 @@
     shellLaunch: { gain: 0.9, max: 2, gap: 0.12 }, shellBoom: { gain: 1.0, max: 3, gap: 0.1 }, missile: { gain: 0.45, max: 2, gap: 0.1 },
     jumpIn: { gain: 0.5, max: 2, gap: 0.12 }, jumpOut: { gain: 0.5, max: 2, gap: 0.12 }, lane: { gain: 0.3, max: 2, gap: 0.1 },
     fieldUp: { gain: 0.7, max: 1, gap: 0.5 }, fieldDown: { gain: 0.6, max: 1, gap: 0.5 },
+    lanceCharge: { gain: 0.8, max: 1, gap: 0.5 }, lanceFire: { gain: 1.0, max: 1, gap: 0.3 }, launch: { gain: 0.45, max: 2, gap: 0.15 },
   };
   const sfxLast = {};
   function sfxSpatial(x, y, z) {
@@ -1283,6 +1464,9 @@
       else if (e.kind === 'depart' || e.kind === 'escape') add('jumpOut', x, y, z, side);
       else if (e.kind === 'laneDepart') add('lane', x, y, z, side);
       else if (e.kind === 'fieldUp') add('fieldUp', e.x, 0, e.y, side);
+      else if (e.kind === 'charge') add('lanceCharge', x, y, z, side);
+      else if (e.kind === 'lance') add('lanceFire', x, y, z, side);
+      else if (e.kind === 'launch') add('launch', x, y, z, side);
       else if (e.kind === 'fieldDown') add('fieldDown', e.x, 0, e.y, side);
     }
     // 鳴らす
@@ -1369,7 +1553,7 @@
       const e = R.flashes[k];
       if (e.t > vt) continue;
       if (e.t < vt - W) break;
-      if ((e.kind === 'death' && e.big) || e.kind === 'fieldUp' || e.kind === 'fieldDown') return e;
+      if ((e.kind === 'death' && e.big) || e.kind === 'fieldUp' || e.kind === 'fieldDown' || e.kind === 'lance') return e;
     }
     return null;
   }
@@ -1571,8 +1755,9 @@
   // 艦カードの副兵装の行: 種類・射程・爆発半径・残弾（クリックした艦のまわりに射程の球も出る）
   function secondaryInfo(d, left) {
     if (!E.hasSecondary(d)) return '';
-    const kind = { line: 'ライン型', shell: 'シェル', missile: '誘導弾', drone: '無人機' }[d.sKind] || d.sKind;
+    const kind = { line: 'ライン型', shell: 'シェル', missile: '誘導弾', drone: '無人機', lance: '貫く線' }[d.sKind] || d.sKind;
     let t = kind + ' 射程' + d.sRange + '光秒';
+    if (d.sKind === 'lance') t += '・溜め' + Math.round(d.sCharge / 60) + '分・太さ' + d.sWidth + '光秒';
     if (d.sBlast > 0 && (d.sKind === 'shell' || d.sKind === 'missile')) t += '・爆発半径' + d.sBlast + '光秒';
     if (d.sAmmo > 0 && left >= 0) t += '・残弾 ' + left + ' / ' + Math.floor(d.sAmmo);
     return '<div class="k" style="margin-top:3px">' + esc(t) + '</div>';
@@ -1595,6 +1780,17 @@
       if (fl & FL.resupply) st.push('弾の補充に戻っている');
       if (fl & FL.lock) st.push('ロックタイム残り ' + Math.round(f0.u[o + 5] / 60) + '分');
       if (fl & FL.linked) st.push('リンク中');
+      if (fl & FL.charge) {
+        const c = R.charges.find((x) => x.i === i && V.vt >= x.t0 && V.vt < x.t1);
+        st.push('貫く線を溜めている' + (c ? '（' + Math.round(clamp((V.vt - c.t0) / Math.max(1, u.def.sCharge), 0, 1) * 100) + '%）' : ''));
+      }
+      if (fl & FL.charged) st.push('溜め終わり、撃つ向きを待っている');
+      if (fl & FL.hub) st.push('後ろにレーンを敷いている');
+      if (u.def.hangarOn) {
+        let n = 0;
+        R.S.units.forEach((w, j) => { if (w.aboard === i || (R.S.scn.units[j] && R.S.scn.units[j].aboard === i)) { const fw = f0.u[j * FW + 4]; if ((fw & FL.aboard) && (fw & FL.alive)) n++; } });
+        st.push('積んでいる艦 ' + n + '隻');
+      }
     }
     const html = '<b>' + esc(u.def.name) + '</b> <span class="k">#' + (i + 1) + '・' + esc(R.S.sides[u.side].name) + '</span>' +
       '<div class="k">船体 ' + Math.round(hp * u.def.hp) + ' / ' + u.def.hp + '</div><div class="meter"><div style="width:' + Math.round(hp * 100) + '%;background:' + sideCss(u.side) + '"></div></div>' +
