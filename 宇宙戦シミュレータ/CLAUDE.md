@@ -35,7 +35,7 @@ node test/run.js                                          # エンジンのテ�
 - 戦いは `engine.js` で計算し直して、記録フレームを再生する（シナリオとシードが同じなら2Dの画面と同じ結果）。2Dの画面からは localStorage の `uchusen-3d-handoff` で受け取る
 - 高さ（3Dの y）は見た目だけ（`computeHeights`）。混んだ群れの水平の散らし（`updateSpread`）も見た目だけ。計算には影響しない
 - 射撃の記録は `SHOT_W` = 12 個ずつ（位置・命中・陣営・時刻・撃った艦・標的・種類 `SHOT_KIND`・届くまでの秒数・爆発で沈んだ数）。シェルは命中の欄に爆発で損害を受けた数が入る。貫く線（`SHOT_KIND.lance`）は着いた位置が射程いっぱいの線の端、命中の欄が線の上で損害を受けた数。シェルと誘導弾は着弾の時刻に記録する。フレームの間の射撃もすべて次のフレームにためる。記録フレームは `FRAME_W` = 11 個ずつ（10 番目が副兵装の残弾）。無人機の位置はフレームの `drones`（`DRONE_W` = 6 個ずつ）
-- モデルの差し替えは `models/README.md`。GLB を置いて `models/models.json` に書き、`node tools/pack-models.js`
+- 艦のモデルは、両陣営のグランドデザイン（`models/デザイン.md`。人類は「軍艦＋幽子の輪」、ザイレンは「線と体節」。2026-10-16 にユーザーと決めた）にそって `models/designs.js` で組み立て、`models/gallery.html` で GLB に書き出したもの。艦種を足したり形を変えたりするときは、このデザインと共通部品にそって作る。差し替えの手順は `models/README.md`（GLB を置いて `models/models.json` に書き、`node tools/pack-models.js`）
 - こちらから見た目は確認できないので、ビューアを変えたら表示の確認をユーザーに頼む
 
 ## 守ること
@@ -61,7 +61,7 @@ node test/run.js                                          # エンジンのテ�
 ## ファイル
 
 - `index.html` 画面と見た目、`ui.js` 画面の制御、`engine.js` 計算エンジン、`presets.js` 艦種の初期値とプリセット
-- `viewer3d.html` `viewer3d.js` `viewer3d-models.js` `viewer3d-audio.js` 3Dビューア（見た目・モデル・効果音）、`models/` 差し替え用のモデル
+- `viewer3d.html` `viewer3d.js` `viewer3d-models.js` `viewer3d-audio.js` 3Dビューア（見た目・モデル・効果音）、`models/` 艦のモデル（グランドデザイン・組み立てのコード・見本のページ・GLB）
 - `tools/battle.js` `tools/sweep.js` `tools/lib.js` コマンド
 - `scenarios/` プリセットの JSON（`node tools/export-presets.js` で作り直せる）
 - `test/run.js` エンジンのテスト

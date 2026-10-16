@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>艦のモデル見本</title>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+/* 3Dビューアと同じく、暗い一枚の見た目（明るいテーマは持たない）。艦を並べて見て、GLB を書き出すための道具 */
+:root { --void: #03060a; --ink: #e9eef4; --ink-2: #a7b2bf; --ink-3: #6f7c8a; --line: #24303c; --panel: rgba(10, 16, 23, 0.86); --human: #6fb2ff; --zairen: #ff9b4f; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--void); color: var(--ink); font: 14px/1.6 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif; overflow: hidden; }
+canvas { display: block; }
+#ui { position: fixed; left: 16px; top: 16px; width: min(320px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+p { margin: 4px 0 10px; color: var(--ink-2); font-size: 12.5px; }
+h2 { font-size: 12px; margin: 12px 0 6px; color: var(--ink-3); font-weight: 600; letter-spacing: 0.05em; }
+.list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+button { font: inherit; font-size: 13px; color: var(--ink); background: #121b25; border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; cursor: pointer; text-align: left; }
+button:hover { border-color: #3a4a5a; }
+button[aria-pressed="true"] { border-color: var(--ink-2); background: #1a2633; }
+button .t { display: block; color: var(--ink-3); font-size: 11px; }
+.h { border-left: 3px solid var(--human); }
+.z { border-left: 3px solid var(--zairen); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.row button { text-align: center; }
+#labels span { position: fixed; transform: translate(-50%, 0); font-size: 12px; color: var(--ink-2); pointer-events: none; white-space: nowrap; text-shadow: 0 0 4px #000; }
+#msg { position: fixed; right: 16px; bottom: 16px; color: var(--ink-2); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>艦のモデル見本</h1>
+  <p>グランドデザイン（<code>デザイン.md</code>）にそって <code>designs.js</code> で組み立てた艦です。ドラッグで回し、ホイールで寄れます。</p>
+  <div class="row"><button id="lineup" aria-pressed="true">全部を並べる</button></div>
+  <h2>人類統合機構（軍艦＋幽子の輪）</h2>
+  <div class="list" id="listH"></div>
+  <h2>ザイレン（線と体節）</h2>
+  <div class="list" id="listZ"></div>
+  <h2>書き出し</h2>
+  <div class="row"><button id="expAll">GLBを全部書き出す</button><button id="expOne" disabled>この艦のGLB</button></div>
+  <p>書き出した GLB をこのフォルダ（<code>models</code>）に置き、一つ上のフォルダで <code>node tools/pack-models.js</code> を実行すると、3Dビューアで使われます。</p>
+</div>
+<div id="labels"></div>
+<div id="msg"></div>
+<script src="designs.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const K = window.ShipDesigns(THREE, { mergeGeometries, mergeVertices });
+
+// 描画の土台
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#05080d');
+const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.05, 500);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight('#b8c8dc', '#1a1410', 0.65));
+const key = new THREE.DirectionalLight('#fff4e6', 1.9); key.position.set(6, 9, 7); scene.add(key);
+const rim = new THREE.DirectionalLight('#7fb0ff', 1.3); rim.position.set(-8, 3, -9); scene.add(rim);
+const fill = new THREE.DirectionalLight('#ffd2b0', 0.5); fill.position.set(-4, -6, 6); scene.add(fill);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.92);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// 艦を作る（大きさを長さ1にそろえる）
+const ships = {};
+for (const it of K.LIST) {
+  const g = K.build(it.key);
+  const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+  const len = Math.max(size.z, size.x * 0.8, size.y * 0.8);
+  const holder = new THREE.Group();
+  g.position.sub(c);
+  holder.add(g);
+  holder.scale.setScalar(1 / len);
+  ships[it.key] = { it, group: g, holder, tris: g.userData.tris };
+  scene.add(holder);
+}
+
+// 並べ方: 人類を上の段、ザイレンを下の段に
+let focus = null;
+const labels = [];
+function lineup() {
+  focus = null;
+  const H = K.LIST.filter((x) => x.faction === 'human'), Z = K.LIST.filter((x) => x.faction === 'zairen');
+  const place = (arr, y) => arr.forEach((it, i) => {
+    const s = ships[it.key];
+    s.holder.visible = true;
+    s.holder.position.set(2.25 + (i - (arr.length - 1) / 2) * 1.55, y, 0);
+    s.holder.rotation.set(0, -0.6, 0);
+  });
+  place(H.slice(0, 5), 1.55); place(H.slice(5), 0.1); place(Z, -1.4);
+  camera.position.set(1.1, 1.2, 8.6); controls.target.set(1.1, 0, 0); controls.update();
+  setPressed('lineup');
+  $('expOne').disabled = true;
+}
+function show(keyName) {
+  focus = keyName;
+  for (const [k, s] of Object.entries(ships)) s.holder.visible = k === keyName;
+  const s = ships[keyName];
+  s.holder.position.set(0, 0, 0); s.holder.rotation.set(0, 0, 0);
+  camera.position.set(1.05, 0.5, 1.3); controls.target.set(-0.18, 0, 0); controls.update();
+  setPressed(keyName);
+  $('expOne').disabled = false;
+  $('msg').textContent = s.it.name + '（' + keyName + '）・約' + s.tris.toLocaleString() + '面';
+}
+function setPressed(k) { for (const b of document.querySelectorAll('#ui button[data-k], #lineup')) b.setAttribute('aria-pressed', String((b.dataset.k || 'lineup') === k)); }
+
+for (const it of K.LIST) {
+  const b = document.createElement('button');
+  b.dataset.k = it.key;
+  b.className = it.faction === 'human' ? 'h' : 'z';
+  b.innerHTML = it.name + '<span class="t">' + it.key + '・約' + ships[it.key].tris.toLocaleString() + '面</span>';
+  b.onclick = () => show(it.key);
+  $(it.faction === 'human' ? 'listH' : 'listZ').appendChild(b);
+  const l = document.createElement('span'); l.textContent = it.name; $('labels').appendChild(l); labels.push({ el: l, key: it.key });
+}
+$('lineup').onclick = lineup;
+
+// GLB の書き出し（艦の形そのまま。大きさはビューアがそろえる）
+function glb(keyName) {
+  const g = K.build(keyName);
+  return new Promise((res, rej) => new GLTFExporter().parse(g, (r) => res(r), (e) => rej(e), { binary: true }));
+}
+function download(buf, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type: 'model/gltf-binary' }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('expOne').onclick = async () => { if (focus) download(await glb(focus), focus + '.glb'); };
+$('expAll').onclick = async () => { for (const it of K.LIST) { download(await glb(it.key), it.key + '.glb'); await new Promise((r) => setTimeout(r, 250)); } };
+
+const tmp = new THREE.Vector3();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const t = now / 1000;
+  if (!focus) for (const s of Object.values(ships)) s.holder.rotation.y = -0.6 + Math.sin(t * 0.25) * 0.5;
+  controls.update();
+  composer.render();
+  for (const l of labels) {
+    const s = ships[l.key];
+    if (focus || !s.holder.visible) { l.el.style.display = 'none'; continue; }
+    tmp.copy(s.holder.position); tmp.y -= 0.42; tmp.project(camera);
+    l.el.style.display = '';
+    l.el.style.left = ((tmp.x + 1) / 2 * window.innerWidth) + 'px';
+    l.el.style.top = ((1 - tmp.y) / 2 * window.innerHeight) + 'px';
+  }
+}
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+});
+lineup();
+requestAnimationFrame(loop);
+
+// 外から使う（書き出しの自動化と確認用）
+window.ShipGallery = {
+  list: () => K.LIST.map((it) => ({ key: it.key, name: it.name, faction: it.faction, tris: ships[it.key].tris })),
+  show, lineup,
+  view: (pos, look) => { camera.position.set(...pos); controls.target.set(...(look || [0, 0, 0])); controls.update(); },
+  exportAll: async () => {
+    const out = {};
+    for (const it of K.LIST) {
+      const buf = new Uint8Array(await glb(it.key));
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+      out[it.key] = btoa(bin);
+    }
+    return out;
+  },
+};
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>
