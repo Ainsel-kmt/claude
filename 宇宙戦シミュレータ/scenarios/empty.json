@@ -25,14 +25,18 @@
    "color": "blue",
    "reaction": 120,
    "sharing": "comms",
-   "retreatBelow": 0
+   "retreatBelow": 0,
+   "retreatCost": 0,
+   "retreatMode": "either"
   },
   {
    "name": "ザイレン",
    "color": "orange",
    "reaction": 600,
    "sharing": "always",
-   "retreatBelow": 0
+   "retreatBelow": 0,
+   "retreatCost": 0,
+   "retreatMode": "either"
   }
  ],
  "types": {
@@ -883,7 +887,7 @@
    "wFalloff": 0.2,
    "wMounts": 8,
    "speed": 0.02,
-   "sensor": 30,
+   "sensor": 60,
    "jump": "lane",
    "lockTime": 60,
    "ai": "hold",
@@ -907,7 +911,7 @@
    "sOn": true,
    "sKind": "lance",
    "sDamage": 2000,
-   "sRange": 30,
+   "sRange": 60,
    "sInterval": 60,
    "sAccuracy": 1,
    "sFalloff": 0,

@@ -162,6 +162,28 @@ for (const p of P.SCENARIOS) {
   check('全艦撤退なら相手の勝ち（撤退）', S.result.winner === 1 && S.result.reason === 'retreat', S.result);
 }
 
+// ---- 全軍撤退: 割合と残りの戦力（コストの合計）。1分に1隻ずつ沈められ、撤退に移ったときに何隻沈んでいたかを見る
+{
+  const v = clone(T.generic); v.cost = 10; v.hp = 100; v.wDamage = 0; v.ai = 'static'; v.speed = 0;
+  const shooter = clone(T.generic); shooter.wDamage = 1000; shooter.wAccuracy = 1; shooter.wRange = 10; shooter.wInterval = 60; shooter.ai = 'static';
+  // present 隻が初めからいて、pending 隻が appear 秒に着く
+  function trial(side0, present, pending, appear) {
+    const units = line('v', 0, present, 0, 0, 0.5).concat(line('v', 0, pending, 0, 3, 0.5, { appear }), [{ type: 'shooter', side: 1, x: 2, y: 0 }]);
+    const S = E.createSim(scn({ v, shooter }, units, { sides: [Object.assign({ name: 'A', reaction: 0, sharing: 'always' }, side0), { name: 'B', reaction: 0, sharing: 'always' }] }), {});
+    let at800 = null;
+    while (!S.sideRetreat[0] && S.t < 3600) { E.step(S); if (at800 === null && S.t >= 800) at800 = S.sideRetreat[0]; }
+    return { go: S.sideRetreat[0], dead: S.units.filter((u) => u.side === 0 && !u.alive).length, t: S.t, at800 };
+  }
+  const a = trial({ retreatCost: 25 }, 4, 4, 1e6);
+  check('残りの戦力: 戦場の合計がコスト25を下回ると撤退（まだ着いていない援軍は数えない）', a.go && a.dead === 2, a);
+  const b = trial({ retreatBelow: 0.9, retreatCost: 25, retreatMode: 'either' }, 4, 4, 1e6);
+  check('割合とコストの「どちらか」: 援軍を含めた割合が先に下回って撤退', b.go && b.dead === 1, b);
+  const c = trial({ retreatBelow: 0.9, retreatCost: 25, retreatMode: 'both' }, 4, 4, 1e6);
+  check('割合とコストの「両方」: 両方を下回るまで撤退しない', c.go && c.dead === 2, c);
+  const d = trial({ retreatCost: 25 }, 1, 3, 900);
+  check('残りの戦力: 一度その値以上になるまでは働かない（援軍が着いてから働く）', d.at800 === false && d.go && d.dead === 2 && d.t > 900, d);
+}
+
 // ---- 救援: 手が空いた護衛は、攻められている味方の拠点へ向かう（通信艦が随伴していても待ち合わない）
 {
   const st = clone(T.base); st.wDamage = 0; st.sOn = false; st.fieldOn = false; st.hp = 1e7;

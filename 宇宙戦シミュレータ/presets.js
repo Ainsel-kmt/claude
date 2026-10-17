@@ -128,10 +128,10 @@
       name: 'オルドラ級', abbr: 'オ', shape: 'hexagon', size: 2.6, cost: 30, origin: 1,
       hp: 6000, shield: 4000, shieldRegen: 3, evasion: 0,
       wDamage: 40, wRange: 4.5, wInterval: 30, wAccuracy: 0.8, wFalloff: 0.2, wMounts: 8,
-      speed: 0.02, sensor: 30, jump: 'lane', lockTime: 60,
+      speed: 0.02, sensor: 60, jump: 'lane', lockTime: 60,
       ai: 'hold', priority: 'nearest', retreatAt: 0,
       pdOn: true, pdRange: 1.5, pdChance: 0.4, pdInterval: 8,
-      sOn: true, sKind: 'lance', sDamage: 2000, sRange: 30, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
+      sOn: true, sKind: 'lance', sDamage: 2000, sRange: 60, sInterval: 60, sAccuracy: 1, sFalloff: 0, sMounts: 1, sBypass: 0,
       sAmmo: 0, sCharge: 5 * M, sWidth: 0.3,
       hubOn: true, hubSpeed: 60 / (40 * M),
       hangarOn: true, hangarCap: 40, hangarInterval: 30, hangarBatch: 2,
@@ -442,7 +442,7 @@
     units.push(...group('narm', 1, 40, H3[0], H3[1], 0.6, 'cluster', { appear: 50 * M_ }));
     return {
       name: '巨大艦の試し',
-      note: 'ザイレンの旗艦（オルドラ級。シミュレータだけの仮の艦種）の3つのしくみを見る場面。旗艦はH2から人類の主力へ向かって進みながら、後ろにレーンを敷く（動くハブ）。T+50分に後方のハブH3に着く予備（ナーム級40）は、そのレーンで旗艦のそばまで跳んでくる。旗艦は積んできたナーム級30を、敵を見つけると30秒ごとに2隻ずつ出す（方舟）。人類の主力が30光秒に入ると、5分溜めて、線の上に並ぶ敵すべてを貫く（攻城線砲）。人類はT+70分に静穏場艦を旗艦のレーンの途中へ送り、妨害場でレーンを断つ。旗艦が沈むと、旗艦が敷いたレーンは消え、積まれたままの艦も沈む。数値は仮置き。',
+      note: 'ザイレンの旗艦（オルドラ級。シミュレータだけの仮の艦種）の3つのしくみを見る場面。旗艦はH2から人類の主力へ向かって進みながら、後ろにレーンを敷く（動くハブ）。T+50分に後方のハブH3に着く予備（ナーム級40）は、そのレーンで旗艦のそばまで跳んでくる。旗艦は積んできたナーム級30を、敵を見つけると30秒ごとに2隻ずつ出す（方舟）。人類の主力が60光秒に入ると、5分溜めて、線の上に並ぶ敵すべてを貫く（攻城線砲）。人類はT+70分に静穏場艦を旗艦のレーンの途中へ送り、妨害場でレーンを断つ。旗艦が沈むと、旗艦が敷いたレーンは消え、積まれたままの艦も沈む。数値は仮置き。',
       settings: { timeLimit: 4 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0.3 },
@@ -476,10 +476,11 @@
       r1: 120, r1At: 90,  // ザイレン第2波（後方のハブに着く ナーム級・時刻（分））
       r2: 80, r2At: 180,  // ザイレン第3波
       hub: 240,           // ザイレンの進出点（ハブ）の地球からの距離（光秒）
-      goal: 80,           // オルドラ級の目標（地球からの距離）
+      goal: 55,           // オルドラ級の目標（地球からの距離）。貫く線（射程60光秒）が地球拠点に届く
       field: 150,         // 地球拠点の妨害場の半径（光秒）
       n: 8, g: 100, d: 6, m: 8, c: 4,   // 本国艦隊のノード艦・ガード級・砲撃艦・ミサイル艦・無人機母艦
       rn: 3, rg: 40, rm: 3, rc: 2, rAt: 240,  // 植民星系からの増援と到着時刻（分）
+      retreat: 0.25, retreatCost: 0, retreatMode: 'either',  // ザイレンの全軍撤退ライン（割合・残りの戦力・組み合わせ）
     }, o || {});
     const DEG = Math.PI / 180;
     const pol = (r, a) => [Math.round(r * Math.cos(a * DEG) * 100) / 100, Math.round(r * Math.sin(a * DEG) * 100) / 100];
@@ -547,7 +548,7 @@
       settings: { timeLimit: 10 * H },
       sides: [
         { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0 },
-        { name: 'ザイレン', color: 'orange', reaction: 10 * M_, sharing: 'always', retreatBelow: 0.25 },
+        { name: 'ザイレン', color: 'orange', reaction: 10 * M_, sharing: 'always', retreatBelow: o.retreat, retreatCost: o.retreatCost, retreatMode: o.retreatMode },
       ],
       types,
       units,

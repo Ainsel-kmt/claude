@@ -25,14 +25,18 @@
    "color": "blue",
    "reaction": 180,
    "sharing": "comms",
-   "retreatBelow": 0.3
+   "retreatBelow": 0.3,
+   "retreatCost": 0,
+   "retreatMode": "either"
   },
   {
    "name": "ザイレン",
    "color": "orange",
    "reaction": 600,
    "sharing": "always",
-   "retreatBelow": 0.25
+   "retreatBelow": 0.25,
+   "retreatCost": 0,
+   "retreatMode": "either"
   }
  ],
  "types": {

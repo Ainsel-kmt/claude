@@ -25,14 +25,18 @@
    "color": "blue",
    "reaction": 0,
    "sharing": "always",
-   "retreatBelow": 0
+   "retreatBelow": 0,
+   "retreatCost": 0,
+   "retreatMode": "either"
   },
   {
    "name": "橙軍",
    "color": "orange",
    "reaction": 0,
    "sharing": "always",
-   "retreatBelow": 0
+   "retreatBelow": 0,
+   "retreatCost": 0,
+   "retreatMode": "either"
   }
  ],
  "types": {

@@ -42,6 +42,10 @@
     comms: '通信艦がいるときだけ共有',
     local: '共有しない（各艦が自分で見る）',
   };
+  const RETREAT_MODE = {
+    either: 'どちらかを下回ったら',
+    both: '両方を下回ったら',
+  };
   const FIELD_MODE = {
     arrive: '目標地点に着いたら（目標なしなら開始直後）',
     immediate: '開始直後',
@@ -83,8 +87,8 @@
   };
 
   const DEFAULT_SIDES = [
-    { name: '人類統合機構', color: 'blue', reaction: 120, sharing: 'comms', retreatBelow: 0 },
-    { name: 'ザイレン', color: 'orange', reaction: 600, sharing: 'always', retreatBelow: 0 },
+    { name: '人類統合機構', color: 'blue', reaction: 120, sharing: 'comms', retreatBelow: 0, retreatCost: 0, retreatMode: 'either' },
+    { name: 'ザイレン', color: 'orange', reaction: 600, sharing: 'always', retreatBelow: 0, retreatCost: 0, retreatMode: 'either' },
   ];
 
   // 編集画面用の項目定義。scale: 表示値 = 保存値 / scale。pct: 表示値 = 保存値 × 100
@@ -179,7 +183,9 @@
     { k: 'name', label: '名前', t: 'text' },
     { k: 'reaction', label: '反応時間', unit: '分', scale: 60, step: 0.5, min: 0, help: '遠くの敵を見つけてから陣営として動くまでの遅れ。近く（射程の1.5倍以内）の敵には即座に応戦する' },
     { k: 'sharing', label: '情報共有', t: 'select', opts: SHARING },
-    { k: 'retreatBelow', label: '全軍撤退ライン', t: 'pct', help: '戦力がこの割合を下回ると全艦が撤退に移る。0% なら最後まで戦う' },
+    { k: 'retreatBelow', label: '全軍撤退ライン（割合）', t: 'pct', help: '戦力（初めを100%として、まだ着いていない援軍も含める）がこの割合を下回ると全艦が撤退に移る。0% ならこの判定はしない' },
+    { k: 'retreatCost', label: '全軍撤退ライン（残りの戦力）', unit: 'コスト', min: 0, help: '戦場にいる艦（方舟に積まれている艦を含む。まだ着いていない援軍は数えない）の「コスト × 耐久の割合」の合計がこの値を下回ると全艦が撤退に移る。一度この値以上になってから働く（あとから援軍で厚くなる陣営が、始めにすぐ引かないように）。0 ならこの判定はしない' },
+    { k: 'retreatMode', label: '撤退ラインの組み合わせ', t: 'select', opts: RETREAT_MODE, help: '割合と残りの戦力の両方を決めたときに使う。片方が 0 なら、もう片方だけで判定する' },
   ];
 
   // ---------------------------------------------------------------- 小道具
@@ -248,6 +254,8 @@
       const o = Object.assign({}, DEFAULT_SIDES[i], (s.sides || [])[i] || {});
       o.reaction = Math.max(0, Number(o.reaction) || 0);
       o.retreatBelow = Math.max(0, Number(o.retreatBelow) || 0);
+      o.retreatCost = Math.max(0, Number(o.retreatCost) || 0);
+      if (!RETREAT_MODE[o.retreatMode]) o.retreatMode = 'either';
       if (!SHARING[o.sharing]) o.sharing = 'always';
       return o;
     });
@@ -299,7 +307,7 @@
       fields: [],
       contacts: s.sides.map(() => new Map()),
       sharing: s.sides.map(() => true),
-      sideRetreat: s.sides.map(() => false),
+      sideRetreat: s.sides.map(() => false), retreatArmed: s.sides.map(() => false),
       events: [], evBuf: new Map(), shots: [],
       hist: { t: [], str: s.sides.map(() => []), cnt: s.sides.map(() => []) },
       record: !!opt.record, frames: [], recEvery: 1, laneSnap: null, laneSnapVer: 0,
@@ -803,13 +811,38 @@
     return s;
   }
 
+  // 戦場にいる戦力（方舟に積まれている艦を含む。まだ着いていない援軍と離脱した艦は除く）
+  function fieldStrength(S, k) {
+    let s = 0;
+    for (const u of S.units) {
+      if (u.side !== k || !u.alive || u.escaped) continue;
+      if (!u.present && !(u.aboard >= 0 && S.units[u.aboard].present)) continue;
+      s += u.def.cost * Math.max(0, u.hp) / u.def.hp;
+    }
+    return s;
+  }
+
+  // 全軍撤退: 割合（初めを100%として、まだ着いていない援軍も含める）と、残りの戦力（コストの合計。戦場にいる艦だけ）。
+  // 両方決めたときは「どちらかを下回ったら」か「両方を下回ったら」。残りの戦力の判定は、一度その値以上になってから働く
   function sideRetreatCheck(S) {
     S.sides.forEach((sd, k) => {
-      if (S.sideRetreat[k] || !(sd.retreatBelow > 0) || !(S.init[k] > 0)) return;
-      if (strengthOf(S, k, true, false) / S.init[k] < sd.retreatBelow) {
-        S.sideRetreat[k] = true;
-        ev(S, 'retreatAll', k, '', Math.round(sd.retreatBelow * 100) + '%');
+      if (S.sideRetreat[k]) return;
+      const usePct = sd.retreatBelow > 0 && S.init[k] > 0, useCost = sd.retreatCost > 0;
+      if (!usePct && !useCost) return;
+      let lowPct = false, lowCost = false;
+      if (usePct) lowPct = strengthOf(S, k, true, false) / S.init[k] < sd.retreatBelow;
+      if (useCost) {
+        const f = fieldStrength(S, k);
+        if (f >= sd.retreatCost) S.retreatArmed[k] = true;
+        lowCost = S.retreatArmed[k] && f < sd.retreatCost;
       }
+      let go;
+      if (usePct && useCost) go = sd.retreatMode === 'both' ? lowPct && lowCost : lowPct || lowCost;
+      else go = usePct ? lowPct : lowCost;
+      if (!go) return;
+      S.sideRetreat[k] = true;
+      const pct = Math.round(sd.retreatBelow * 100) + '%', cost = 'コスト' + Math.round(sd.retreatCost * 10) / 10;
+      ev(S, 'retreatAll', k, '', usePct && useCost && sd.retreatMode === 'both' ? pct + 'と' + cost + 'の両方' : lowPct ? pct : cost);
     });
   }
 
@@ -2088,7 +2121,7 @@
   }
 
   const api = {
-    AI, PRIORITY, MOVE, JUMP, SHAPES, SHARING, FIELD_MODE, S_KIND, SHOT_KIND, FLAGS: F, FRAME_W, SHOT_W, DRONE_W,
+    AI, PRIORITY, MOVE, JUMP, SHAPES, SHARING, FIELD_MODE, RETREAT_MODE, S_KIND, SHOT_KIND, FLAGS: F, FRAME_W, SHOT_W, DRONE_W,
     DEFAULT_TYPE, DEFAULT_SETTINGS, DEFAULT_SIDES, TYPE_FIELDS, SETTING_FIELDS, SIDE_FIELDS,
     normalizeType, normalizeScenario, createSim, step, runUntil, runToEnd, runOnce,
     fmtTime, fmtMin, isKey, dpsOf, clone, hasSecondary,
