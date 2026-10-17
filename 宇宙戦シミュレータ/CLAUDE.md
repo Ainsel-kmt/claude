@@ -14,6 +14,7 @@ node tools/battle.js sB --set types.quiet.shield=6000     # 値を書き換え�
 node tools/battle.js basic --seed 3 --events              # 1回分の経過を時刻順に
 node tools/sweep.js sB --param types.quiet.shield --values 2500,4000,6000,8000   # 値を振って比べる
 node tools/battle.js sB --set ... --save scenarios/試し.json                      # 変えたシナリオを保存
+node tools/earth.js r1=160,r2=110 r1=200,r2=140           # 地球攻略で、地球拠点がどこまで攻められたかを条件ごとに（--trace / --losses で1回分の中身）
 node test/run.js                                          # エンジンのテスト
 ```
 

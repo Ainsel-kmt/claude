@@ -34,6 +34,7 @@ node tools/battle.js sB                                    # 20回戦わせて�
 node tools/battle.js sB --set types.quiet.shield=6000      # 値を書き換えて回す
 node tools/sweep.js sB --param types.quiet.shield --values 2500,4000,6000,8000   # 値を振って比べる
 node tools/battle.js sB --set ... --save scenarios/試し.json                      # 画面で読めるシナリオを保存
+node tools/earth.js r1=160,r2=110 r1=200,r2=140                                 # 地球攻略で、地球拠点がどこまで攻められたかを比べる
 ```
 
 `--set` の値は内部の単位（秒・光秒・c・0〜1 の割合）で書く。`node tools/battle.js --help` で使い方が出る。
@@ -96,6 +97,8 @@ node tools/battle.js sB --set ... --save scenarios/試し.json                  
 ザイレンの全軍撤退ラインは「割合30%と残りの戦力（コスト）235の両方を下回ったら」。割合はまだ着いていない援軍も含めるので、援軍が残っているうちは引かない。残りの戦力は戦場にいる艦だけを数えるので、オルドラ級が地球を攻め始めて護りの艦が減ると引く。
 
 兵力・時刻・距離・撤退ラインは `P.builders.earthSiege({ groups: 5, cargo: 40, escort: 25, r1: 200, r1At: 90, r2: 140, r2At: 180, hub: 240, goal: 55, field: 150, n: 8, g: 100, ..., retreat: 0.3, retreatCost: 235, retreatMode: 'both' })` で変えられる。
+
+調べは `node tools/earth.js` で回せる（条件は earthSiege の引数を `r1=200,r2=140` のように書く。`--trace --seed 1` で1回分の戦力の推移、`--losses --seed 1` でザイレンが沈んだ場所。`--help` で使い方）。下の表はこのコマンドの元になった調べで出した。
 
 **援軍の数を決めた調べ（2026-10-17、ユーザーの依頼「ザイレンが地球に届くよう援軍の数で調整」。目標は「地球拠点は攻められるが、落ちるのはまれ」）**。貫く線の射程を60光秒、オルドラ級の目標を55光秒にしたうえで、シード1〜20（★の行。ほかは1〜10）。「—」は記録していない（ウォードの減り方は途中から記録した）。
 
@@ -182,7 +185,7 @@ node tools/battle.js sB --set ... --save scenarios/試し.json                  
 - `viewer3d.html`・`viewer3d.js`: 3Dビューア。`viewer3d-models.js`: 艦の既定モデルと GLB への差し替え。`viewer3d-audio.js`: 効果音（Web Audio で合成）
 - `models/`: 差し替え用の GLB と `models.json`、`tools/pack-models.js` で作る `models.js`
 - `tools/pack-models.js`: `models/` の GLB を `models.js` にまとめる（ファイルを直接開いたビューアでも読めるように）
-- `tools/battle.js`: 戦闘を回して勝率と損害をまとめる。`tools/sweep.js`: 値を振って比べる。`tools/lib.js`: その共通部品。`tools/export-presets.js`: プリセットを `scenarios/` に書き出す
+- `tools/battle.js`: 戦闘を回して勝率と損害をまとめる。`tools/sweep.js`: 値を振って比べる。`tools/earth.js`: 地球攻略の調べ（地球拠点のウォード・船体の減り方、ザイレンの撤退の時刻。1回分の戦力の推移やザイレンが沈んだ場所も出せる）。`tools/lib.js`: その共通部品。`tools/export-presets.js`: プリセットを `scenarios/` に書き出す
 - `scenarios/`: プリセットのシナリオ JSON
 - `test/run.js`: エンジンのテスト。`node test/run.js` で実行する
 - `CLAUDE.md`: Claude Code 向けの作業メモ。`操作方法.md`: 画面の操作。`シナリオ形式.md`: JSON の形式
