@@ -15,8 +15,8 @@ node tools/battle.js sB --set ... --save scenarios/試し.json                  
 node test/run.js                                          # エンジンのテスト
 ```
 
-- プリセット名: `basic`（正面衝突）、`sA`（S星系外縁 A）、`sB`（S星系外縁 B）、`grand`（大規模会戦: S星系決戦。約400隻で1回5秒ほどかかる）、`arms`（副兵装の試し撃ち）、`giant`（巨大艦の試し。ザイレンの旗艦）、`lan`（同性能の数の差）、`empty`。`scenarios/*.json` も同じ中身
-- 大規模会戦の兵力は `presets.js` の `grandBattle(o)` の引数で変えられる（`P.builders.grandBattle({ w2: 90 })` のように Node から呼べる）
+- プリセット名: `basic`（正面衝突）、`sA`（S星系外縁 A）、`sB`（S星系外縁 B）、`grand`（大規模会戦: S星系決戦。約400隻で1回5秒ほどかかる）、`arms`（副兵装の試し撃ち）、`giant`（巨大艦の試し。ザイレンの旗艦）、`earth`（地球攻略: 本国防衛戦。約800隻・10時間で1回20秒ほどかかる）、`lan`（同性能の数の差）、`empty`。`scenarios/*.json` も同じ中身
+- 大規模会戦の兵力は `presets.js` の `grandBattle(o)` の引数で変えられる（`P.builders.grandBattle({ w2: 90 })` のように Node から呼べる）。地球攻略は `earthSiege(o)`（`P.builders.earthSiege({ groups: 5, cargo: 40 })` など。引数は README の「地球攻略」）
 - `--set` と JSON は**内部の単位**: 時間は秒、距離は光秒、速さは c、割合は 0〜1。画面では分や % で見せているので換算する（45分 → 2700、30% → 0.3）
 - 艦をまとめて変えるときは `"units[type=narm,side=1].ai=hold"` のように条件で選ぶ（`[3]` は4番目、`[*]` は全部）
 - 艦の追加・削除や配置の変更は、シナリオの JSON を書き換えるか、Node のスクリプトで `presets.js` の `formation()` を使う

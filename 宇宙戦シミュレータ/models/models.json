@@ -1,18 +1,50 @@
 {
   "entries": {
-    "node": { "file": "node.glb" },
-    "guard": { "file": "guard.glb" },
-    "comms": { "file": "comms.glb" },
-    "quiet": { "file": "quiet.glb" },
-    "picket": { "file": "picket.glb" },
-    "artillery": { "file": "artillery.glb" },
-    "missile": { "file": "missile.glb" },
-    "carrier": { "file": "carrier.glb" },
-    "base": { "file": "base.glb" },
-    "base2": { "file": "base.glb" },
-    "narm": { "file": "narm.glb" },
-    "garmes": { "file": "garmes.glb" },
-    "elda": { "file": "elda.glb" },
-    "flagship": { "file": "flagship.glb" }
+    "node": {
+      "file": "node.glb"
+    },
+    "guard": {
+      "file": "guard.glb"
+    },
+    "comms": {
+      "file": "comms.glb"
+    },
+    "quiet": {
+      "file": "quiet.glb"
+    },
+    "picket": {
+      "file": "picket.glb"
+    },
+    "artillery": {
+      "file": "artillery.glb"
+    },
+    "missile": {
+      "file": "missile.glb"
+    },
+    "carrier": {
+      "file": "carrier.glb"
+    },
+    "base": {
+      "file": "base.glb"
+    },
+    "base2": {
+      "file": "base.glb"
+    },
+    "narm": {
+      "file": "narm.glb"
+    },
+    "garmes": {
+      "file": "garmes.glb"
+    },
+    "elda": {
+      "file": "elda.glb"
+    },
+    "flagship": {
+      "file": "flagship.glb"
+    },
+    "moon": {
+      "file": "base.glb",
+      "length": 1.4
+    }
   }
 }

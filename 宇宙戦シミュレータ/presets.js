@@ -465,6 +465,106 @@
     };
   }
 
+  // 地球攻略: オルドラ級5隻を中心とするザイレンの大艦隊が、人類の本国（地球拠点）の攻略を目指す。
+  // 設定の「本国は最大の急所で、妨害場で最も厚く守られる」と「攻め側は多方面同時到着で守りを割る」を筋にした想定。
+  // o で兵力や時刻を変えられる（Node から P.builders.earthSiege({ ... }) で呼べる）
+  function earthSiege(o) {
+    o = Object.assign({
+      groups: 5,          // ザイレンの攻撃群（1群にオルドラ級1・ガルメス級2・ナーム級 escort 隻）
+      cargo: 40,          // オルドラ級1隻に積むナーム級
+      escort: 25,         // 1群のナーム級
+      r1: 120, r1At: 90,  // ザイレン第2波（後方のハブに着く ナーム級・時刻（分））
+      r2: 80, r2At: 180,  // ザイレン第3波
+      hub: 240,           // ザイレンの進出点（ハブ）の地球からの距離（光秒）
+      goal: 80,           // オルドラ級の目標（地球からの距離）
+      field: 150,         // 地球拠点の妨害場の半径（光秒）
+      n: 8, g: 100, d: 6, m: 8, c: 4,   // 本国艦隊のノード艦・ガード級・砲撃艦・ミサイル艦・無人機母艦
+      rn: 3, rg: 40, rm: 3, rc: 2, rAt: 240,  // 植民星系からの増援と到着時刻（分）
+    }, o || {});
+    const DEG = Math.PI / 180;
+    const pol = (r, a) => [Math.round(r * Math.cos(a * DEG) * 100) / 100, Math.round(r * Math.sin(a * DEG) * 100) / 100];
+    const types = pick(ALL.concat(['flagship']));
+    types.base = Object.assign(types.base, {
+      name: '地球拠点', abbr: '地', size: 3, cost: 100, known: true,
+      hp: 30000, shield: 20000, shieldRegen: 10, wDamage: 80, wRange: 8, wMounts: 12, sensor: 300,
+      fieldRadius: o.field, sMounts: 4, sAmmo: 40, pdRange: 3, pdChance: 0.6, pdInterval: 4,
+    });
+    types.base2 = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), {
+      name: '軌道要塞', abbr: '要', cost: 15, known: true, hp: 4000, shield: 2500, fieldOn: false,
+    });
+    types.moon = Object.assign(JSON.parse(JSON.stringify(TYPES.base)), {
+      name: '月面基地', abbr: '月', size: 2.2, cost: 25, known: true, hp: 8000, shield: 5000, wMounts: 8, fieldOn: false, sAmmo: 20,
+    });
+    const AX = [];
+    for (let k = 0; k < o.groups; k++) AX.push(o.groups > 1 ? -50 + (100 * k) / (o.groups - 1) : 0);
+    const REAR = [o.hub + 280, 0];
+    const reinfAt = [0, -(o.field + 25)];
+    const units = [].concat(
+      // 人類: 地球拠点・月面基地・軌道要塞4（地球から40光秒）と守備隊
+      [{ type: 'base', side: 0, x: 0, y: 0 }],
+      group('guard', 0, 16, 0, 0, 2.5, 'ring', { ai: 'hold' }),
+      [{ type: 'moon', side: 0, x: 1.28, y: 0.2 }],
+      group('guard', 0, 6, 1.28, 0.2, 1.2, 'ring', { ai: 'hold' }),
+      ...[45, -45, 135, -135].map((a) => [{ type: 'base2', side: 0, x: pol(40, a)[0], y: pol(40, a)[1] }].concat(group('guard', 0, 6, pol(40, a)[0], pol(40, a)[1], 1.5, 'ring', { ai: 'hold' }))),
+      // 人類: 本国艦隊。地球の前（ザイレンの来る側）、妨害場の中で迎え撃つ
+      group('node', 0, o.n, 55, 0, 3, 'line', { ai: 'hold' }),
+      group('guard', 0, o.g, 52, 0, 0.6, 'cluster'),
+      group('comms', 0, 3, 45, 0, 1.5, 'line'),
+      group('artillery', 0, o.d, 42, 0, 1.2, 'line'),
+      group('missile', 0, o.m, 46, -6, 1.4, 'line'),
+      group('carrier', 0, o.c, 46, 6, 1.6, 'line'),
+      // 人類: 哨戒の輪（地球から210光秒）と、ザイレンの引くレーンを断ちに出る静穏場艦（両翼）
+      ...[-60, -30, 0, 30, 60].map((a) => group('picket', 0, 2, pol(205, a)[0], pol(205, a)[1], 3, 'line', { ai: 'static' })),
+      ...[-35, 35].map((a) => withGoal(group('quiet', 0, 1, pol(60, a)[0], pol(60, a)[1], 1, 'cluster'), pol(185, a)[0], pol(185, a)[1])),
+      ...[-35, 35].map((a) => withGoal(group('guard', 0, 8, pol(58, a)[0], pol(58, a)[1], 0.6, 'cluster', { ai: 'escort' }), pol(183, a)[0], pol(183, a)[1])),
+      // 人類: 植民星系からの増援（地球の妨害場の外へジャンプで着き、中へ入る）
+      group('node', 0, o.rn, reinfAt[0], reinfAt[1], 2, 'line', { appear: o.rAt * M_, locked: true }),
+      group('guard', 0, o.rg, reinfAt[0] - 2, reinfAt[1], 0.6, 'cluster', { appear: o.rAt * M_, locked: true }),
+      group('missile', 0, o.rm, reinfAt[0] + 4, reinfAt[1], 1.4, 'line', { appear: o.rAt * M_, locked: true }),
+      group('carrier', 0, o.rc, reinfAt[0] + 6, reinfAt[1] - 3, 1.6, 'line', { appear: o.rAt * M_, locked: true }),
+      group('comms', 0, 1, reinfAt[0], reinfAt[1] - 3, 1, 'cluster', { appear: o.rAt * M_, locked: true }),
+    );
+    // ザイレン: 5つの攻撃群。それぞれの進出点（ハブ）から、オルドラ級がレーンを引きずって地球へ向かう
+    AX.forEach((a, k) => {
+      const H = pol(o.hub, a), G = pol(o.goal, a);
+      const fi = units.length;
+      units.push({ type: 'flagship', side: 1, x: H[0], y: H[1], goal: G });
+      units.push(...group('narm', 1, o.cargo, H[0], H[1], 0.6, 'cluster', { aboard: fi }));
+      units.push(...group('garmes', 1, 2, H[0] + 2, H[1], 2, 'line', { ai: 'escort' }));
+      units.push(...group('narm', 1, o.escort, H[0] + 4, H[1], 0.6, 'cluster'));
+    });
+    // ザイレン: 後方のハブに着く後続の波。オルドラ級の引いたレーンで前線まで跳ぶ
+    units.push(...group('narm', 1, o.r1, REAR[0], REAR[1], 0.6, 'cluster', { appear: o.r1At * M_ }));
+    units.push(...group('garmes', 1, 4, REAR[0] + 3, REAR[1], 2, 'line', { appear: o.r1At * M_ }));
+    units.push(...group('narm', 1, o.r2, REAR[0], REAR[1] + 8, 0.6, 'cluster', { appear: o.r2At * M_ }));
+    units.push(...group('garmes', 1, 2, REAR[0] + 3, REAR[1] + 8, 2, 'line', { appear: o.r2At * M_ }));
+    const lanes = AX.map((a) => ({ side: 1, pts: [REAR, pol(o.hub, a)] }));
+    for (let k = 1; k < AX.length; k++) lanes.push({ side: 1, pts: [pol(o.hub, AX[k - 1]), pol(o.hub, AX[k])] });
+    const nZ = o.groups * (1 + o.cargo + 2 + o.escort) + o.r1 + o.r2 + 6;
+    return {
+      name: '地球攻略: 本国防衛戦',
+      note: 'オルドラ級' + o.groups + '隻を中心とするザイレンの大艦隊（約' + nZ + '隻）が、人類の本国・地球拠点の攻略を目指す想定。設定の「本国は最大の急所で、妨害場で最も厚く守られる」と「攻め側は多方面同時到着で守りを割る」を筋にした。ザイレンは地球から' + o.hub + '光秒の' + o.groups + 'つの進出点に同時に現れ、オルドラ級（それぞれナーム級' + o.cargo + 'を積む）がレーンを引きずって地球から' + o.goal + '光秒まで進む。地球の妨害場（半径' + o.field + '光秒）の中ではレーンが寸断されるので、引いたレーンは妨害場の縁で切れ、そこから先は通常航行で攻め込む。後続の波（T+' + o.r1At + '分にナーム級' + o.r1 + '、T+' + o.r2At + '分にナーム級' + o.r2 + '）は後方のハブに着き、オルドラ級の引いたレーンで前線まで跳ぶ。人類は地球拠点（12門・シェル4発ずつ）・月面基地・軌道要塞4基と本国艦隊（ノード艦' + o.n + '・ガード級' + o.g + '・砲撃艦' + o.d + '・ミサイル艦' + o.m + '・無人機母艦' + o.c + '）で守り、静穏場艦2隻が両翼へ出てザイレンのレーンを断つ。T+' + o.rAt + '分に植民星系からの増援が妨害場の外に着く。拠点の位置は互いに知っている。数値は仮置き。',
+      settings: { timeLimit: 10 * H },
+      sides: [
+        { name: '人類統合機構', color: 'blue', reaction: 3 * M_, sharing: 'comms', retreatBelow: 0 },
+        { name: 'ザイレン', color: 'orange', reaction: 10 * M_, sharing: 'always', retreatBelow: 0.25 },
+      ],
+      types,
+      units,
+      lanes,
+      marks: [
+        { x: 0, y: 5, text: '地球拠点（本国）' },
+        { x: 1.28, y: -3, text: '月面基地' },
+        { x: 40, y: 34, text: '軌道要塞' },
+        { x: 55, y: -6, text: '本国艦隊' },
+        { x: REAR[0], y: REAR[1] + 14, text: '後方のハブ（後続の波）' },
+        ...AX.map((a, k) => ({ x: pol(o.hub, a)[0] + 6, y: pol(o.hub, a)[1] + 6, text: '進出点' + (k + 1) })),
+        { x: reinfAt[0], y: reinfAt[1] - 8, text: '増援の到着点（T+' + o.rAt + '分）' },
+        { x: o.field * 0.71, y: -o.field * 0.71 - 6, text: '地球の妨害場の縁' },
+      ],
+    };
+  }
+
   const SCENARIOS = [
     { id: 'basic', label: '正面衝突', make: basic },
     { id: 'sA', label: 'S星系外縁 A（後続が後方）', make: () => sSystem('A') },
@@ -473,10 +573,11 @@
     { id: 'lan', label: '数の差の確認（同性能 20 対 30）', make: lanchester },
     { id: 'arms', label: '副兵装の試し撃ち', make: armsDemo },
     { id: 'giant', label: '巨大艦の試し', make: giantDemo },
+    { id: 'earth', label: '地球攻略: 本国防衛戦', make: earthSiege },
     { id: 'empty', label: '空のマップ', make: empty },
   ];
 
-  const api = { TYPES, SCENARIOS, formation, builders: { grandBattle } };
+  const api = { TYPES, SCENARIOS, formation, builders: { grandBattle, earthSiege } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.SimPresets = api;
 })(typeof window !== 'undefined' ? window : globalThis);
