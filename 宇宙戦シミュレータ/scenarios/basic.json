@@ -15,7 +15,9 @@
   "drawMargin": 0.05,
   "spacing": 0.3,
   "resupplyRange": 10,
-  "resupplyTime": 120
+  "resupplyTime": 120,
+  "stallBreak": 1800,
+  "chaseGiveUp": 1200
  },
  "sides": [
   {

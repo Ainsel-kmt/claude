@@ -467,6 +467,36 @@ for (const p of P.SCENARIOS) {
   check('動くハブ: 沈むと、敷いたレーンが消える', !K.units[0].alive && K.lanes.filter((l) => l.hub === 0).every((l) => l.gone) && K.events.some((e) => e.kind === 'hubLost'), { alive: K.units[0].alive, lanes: K.lanes.map((l) => !!l.gone) });
 }
 
+// ---- 膠着を破る・追撃をあきらめる
+{
+  const g = (extra) => Object.assign(clone(T.generic), { wDamage: 10, wRange: 3, wInterval: 20, wAccuracy: 1, speed: 0.05, sensor: 200, hp: 1e6 }, extra || {});
+  // 人類の持ち場防衛 A と、ザイレンの持ち場防衛 B は 40光秒離れて届かない。最初に A のそばの弱い敵 W を撃って撃ち合いが始まる
+  const units = [
+    { type: 'a', side: 0, x: 0, y: 0, ai: 'hold' },
+    { type: 'b', side: 1, x: 40, y: 0, ai: 'hold' },
+    { type: 'w', side: 1, x: 1, y: 0, ai: 'static' },
+  ];
+  const types = { a: g(), b: g(), w: g({ hp: 1, wDamage: 0 }) };
+  const cfg = (st) => ({ settings: { timeLimit: 3 * 3600, spacing: 0, stallBreak: st } });
+  const S = runFor(scn(types, units, cfg(1800)), 1700);
+  check('膠着を破る: 撃ち合いが止まって30分たつまでは持ち場にいる', S.units[0].ai === 'hold' && Math.abs(S.units[0].x) < 1e-6, { ai: S.units[0].ai, x: S.units[0].x });
+  E.runUntil(S, 2600);
+  check('膠着を破る: 30分たつと両軍の持ち場防衛が突撃に切り替えて寄っていく', S.units[0].ai === 'assault' && S.units[1].ai === 'assault' && S.events.some((e) => e.kind === 'stallBreak') && S.units[1].x - S.units[0].x < 40 - 5, { a: [S.units[0].ai, S.units[0].x], b: [S.units[1].ai, S.units[1].x] });
+  const S0 = runFor(scn(types, units, cfg(0)), 2600);
+  check('膠着を破る: 0 なら持ち場にいたまま', S0.units[0].ai === 'hold' && S0.units[1].ai === 'hold', [S0.units[0].ai, S0.units[1].ai]);
+  // 拠点の守備隊（拠点の近くの持ち場防衛）は残る
+  const st = Object.assign(clone(T.base), { wDamage: 0, sOn: false, fieldOn: false, pdOn: false, hp: 1e6 });
+  const S2 = runFor(scn(Object.assign({ st }, types), [{ type: 'st', side: 0, x: 0, y: 2 }].concat(units), cfg(1800)), 2600);
+  check('膠着を破る: 拠点の守備隊は持ち場に残る', S2.units[1].ai === 'hold', S2.units[1].ai);
+
+  // 追撃をあきらめる: 同じ速さで遠ざかる敵 R を追う突撃の艦は、20分たっても近づけないので R をあきらめ、止まっている敵 Q に向かう
+  const run = { type: 'r', side: 1, x: 10, y: 0, goal: [5000, 0] };
+  const C = runFor(scn({ a: g({ ai: 'assault', priority: 'nearest' }), r: g({ wDamage: 0, ai: 'static' }), q: g({ wDamage: 0, ai: 'static', speed: 0 }) }, [
+    { type: 'a', side: 0, x: 0, y: 0 }, run, { type: 'q', side: 1, x: -30, y: 0 },
+  ], { settings: { timeLimit: 3 * 3600, spacing: 0, stallBreak: 0 } }), 1500);
+  check('追撃をあきらめる: 同じ速さで逃げる敵を20分追うとあきらめ、別の敵を狙う', C.units[0].ignoreId === 1 && C.units[0].tgt === 2 && C.events.some((e) => e.kind === 'giveUp'), { ignore: C.units[0].ignoreId, tgt: C.units[0].tgt });
+}
+
 // ---- 時間切れの判定
 {
   const g = clone(T.generic); g.wDamage = 0;

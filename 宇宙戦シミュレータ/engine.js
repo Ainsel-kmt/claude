@@ -79,6 +79,7 @@
     jumpTime: 20, jumpMin: 15, arrivalError: 0.1,
     laneAccess: 2, laneJumpTime: 5, laneGap: 3,
     retarget: 15, drawMargin: 0.05, spacing: 0.3, resupplyRange: 10, resupplyTime: 120,
+    stallBreak: 1800, chaseGiveUp: 1200,
   };
 
   const DEFAULT_SIDES = [
@@ -168,6 +169,8 @@
     { k: 'drawMargin', label: '時間切れで引き分けにする差', t: 'pct' },
     { k: 'resupplyRange', label: '弾を補充できる距離', unit: '光秒', min: 0, help: '味方の拠点（動かない艦）からこの距離の中にいる艦は、副兵装の弾が少しずつ補充される' },
     { k: 'resupplyTime', label: '1発の補充にかかる時間', unit: '秒', min: 1 },
+    { k: 'stallBreak', label: '膠着を破るまでの時間', unit: '分', scale: 60, min: 0, help: '一度撃ち合いが始まったあと、この時間どちらの陣営も撃たず、敵の位置が分かっていると、持ち場防衛・護衛・随伴の艦が突撃に切り替える（拠点、拠点の守備隊、妨害場やレーン敷設の艦、武器のない艦はそのまま）。両軍とも。0 なら破らない' },
+    { k: 'chaseGiveUp', label: '追撃をあきらめるまでの時間', unit: '分', scale: 60, min: 0, help: '標的が射程の外にいて、この時間追っても1割も近づけなければ、その標的をやめて別の敵を狙う（30分は同じ標的を選ばない）。同じ速さで逃げ続ける敵を、戦場の外まで追い続けないため。撤退中の敵の追撃はあきらめない。0 ならあきらめない' },
     { k: 'spacing', label: '艦どうしの最小間隔', unit: '光秒', step: 0.05, min: 0, help: 'これより近づいた2隻は互いに押し離す（1刻みに動ける距離まで）。0 なら重なってもよい' },
     { k: 'seed', label: '乱数シード', min: 1, help: '命中判定と到着誤差の乱数。複数回試行ではここから順に変える' },
   ];
@@ -300,7 +303,7 @@
       events: [], evBuf: new Map(), shots: [],
       hist: { t: [], str: s.sides.map(() => []), cnt: s.sides.map(() => []) },
       record: !!opt.record, frames: [], recEvery: 1, laneSnap: null, laneSnapVer: 0,
-      refDps: 1e-9, refCost: 1e-9, maxRange: 1,
+      refDps: 1e-9, refCost: 1e-9, maxRange: 1, lastFire: -1,
       proj: [], drones: [], droneSeq: 0,
       arms: s.sides.map(() => ({ fired: 0, hits: 0, blastHits: 0, missiles: 0, missilesDown: 0, drones: 0, dronesDown: 0, droneHits: 0, resupplied: 0 })),
     };
@@ -330,6 +333,7 @@
         kills: 0, dealt: 0, diedAt: -1, by: -1, state: '',
         aboard: p.aboard != null ? p.aboard : -1, cargo: null, hangarOpen: false, hangarNext: 0,
         hubLane: -1, hubRx: 0, hubRy: 0, charge: 0, charged: false,
+        chaseId: -1, chaseAt: 0, chaseD: 0, ignoreId: -1, ignoreUntil: 0,
       };
       u.cd = S.rng() * d.wInterval;
       // 副兵装の装填（副兵装のない艦では乱数を引かない。これまでのシナリオの結果を変えないため）
@@ -421,7 +425,7 @@
     if (extra != null) e.v = extra;
   }
 
-  const MINOR = { jump: 1, lane: 1, retreat: 1, appear: 0 };
+  const MINOR = { jump: 1, lane: 1, retreat: 1, appear: 0, giveUp: 1 };
 
   function flushEvents(S) {
     if (!S.evBuf.size) return;
@@ -453,6 +457,8 @@
         case 'resupplyGo': text = sd + ' の ' + nm + ' が副兵装を撃ち尽くし、' + e.v + ' へ補充に戻る'; break;
         case 'resupplyDone': text = sd + ' の ' + nm + ' が補充を終えて戦いに戻る'; break;
         case 'stationLost': text = sd + ' の ' + nm + ' が守っていた ' + e.v + ' を失い、護衛に切り替えた'; break;
+        case 'stallBreak': text = sd + ' が膠着を破り、持ち場防衛・護衛・随伴の艦（' + e.v + '）を突撃に切り替えた'; break;
+        case 'giveUp': text = sd + ' の ' + nm + ' が追いつけない ' + e.v + ' の追撃をあきらめた'; break;
         case 'hangarOpen': text = sd + ' の ' + nm + ' が敵を見つけ、積んでいた艦（' + e.v + '）を出し始めた'; break;
         case 'launch': text = sd + ' の ' + nm + ' が ' + e.v + ' から出た'; break;
         case 'hangarEmpty': text = sd + ' の ' + nm + ' が積んでいた艦をすべて出した'; break;
@@ -916,6 +922,7 @@
     let best = null, bs = Infinity;
     for (const e of S.units) {
       if (e.side === u.side || !visible(e)) continue;
+      if (e.id === u.ignoreId && S.t < u.ignoreUntil) continue;
       const dd = dist(u, e);
       if (dd > local) {
         const c = C.get(e.id);
@@ -1125,6 +1132,53 @@
     return true;
   }
 
+  // ---------------------------------------------------------------- 膠着と追撃
+
+  // 追撃をあきらめる: 標的が届く距離の外にいるあいだ、chaseGiveUp ごとに近づけたかを見る。1割も近づけていなければ、
+  // その標的をやめて CHASE_IGNORE のあいだ選ばない（同じ速さで逃げ続ける敵を、戦場の外まで追い続けないため）。
+  // 撤退中の敵（敗走）の追撃はあきらめない
+  const CHASE_IGNORE = 1800;
+  function chaseCheck(S, u, tg) {
+    const T = S.set.chaseGiveUp;
+    if (!(T > 0) || !tg || u.retreat || tg.retreat) { u.chaseId = -1; return tg; }
+    const reach = Math.max(reachOf(u.def), engageRange(u.def)) * 1.05 + 0.5, dd = dist(u, tg);
+    if (dd <= reach) { u.chaseId = -1; return tg; }
+    if (u.chaseId !== tg.id) { u.chaseId = tg.id; u.chaseAt = S.t; u.chaseD = dd; return tg; }
+    if (S.t - u.chaseAt < T) return tg;
+    if (dd < u.chaseD * 0.9) { u.chaseAt = S.t; u.chaseD = dd; return tg; }
+    u.ignoreId = tg.id; u.ignoreUntil = S.t + CHASE_IGNORE; u.chaseId = -1;
+    ev(S, 'giveUp', u.side, u.tid, tg.def.name);
+    const nt = pickTarget(S, u);
+    u.rt = S.set.retarget;
+    return nt;
+  }
+
+  // 膠着を破る: 一度撃ち合いが始まったあと、stallBreak のあいだ両軍とも撃たず、敵の位置が分かっている陣営は、
+  // 持ち場防衛・護衛・随伴の艦を突撃に切り替える。拠点（動かない艦）・拠点の守備隊（拠点の近くの持ち場防衛）・
+  // 妨害場やレーン敷設の艦・武器のない艦はそのまま。両軍に同じく効く
+  function breakStall(S) {
+    const T = S.set.stallBreak;
+    if (!(T > 0) || S.lastFire < 0 || S.t - S.lastFire < T) return;
+    let any = false;
+    S.sides.forEach((_, k) => {
+      let known = false;
+      for (const c of S.contacts[k].values()) if (c.at <= S.t) { known = true; break; }
+      if (!known) return;
+      let n = 0;
+      for (const u of S.units) {
+        if (u.side !== k || !visible(u) || u.retreat) continue;
+        const d = u.def;
+        if (u.ai !== 'hold' && u.ai !== 'escort' && u.ai !== 'follow') continue;
+        if (isStation(d) || d.fieldOn || d.layerOn || !isArmed(d)) continue;
+        if (u.ai === 'hold' && u.station >= 0 && S.units[u.station].alive) continue;
+        u.ai = 'assault'; u.rt = 0; u.reliefId = -1;
+        n++;
+      }
+      if (n) { any = true; ev(S, 'stallBreak', k, '', n + '隻'); }
+    });
+    if (any) S.lastFire = S.t;
+  }
+
   // ---------------------------------------------------------------- 思考
 
   function think(S, u) {
@@ -1139,6 +1193,7 @@
     let lost = false;
     if (tg && !canSee(S, u, tg)) { tg = null; lost = true; }
     if (lost || u.rt <= 0) { tg = pickTarget(S, u); u.rt = S.set.retarget; }
+    tg = chaseCheck(S, u, tg);
     u.tgt = tg ? tg.id : -1;
 
     if (u.fs === 1) { u.state = 'deploy'; return; }
@@ -1325,6 +1380,7 @@
   }
 
   function fire(S, u, tg) {
+    S.lastFire = S.t;
     const d = u.def;
     const dd = dist(u, tg);
     const p = d.wAccuracy * (1 - d.wFalloff * Math.min(1, dd / Math.max(d.wRange, 1e-6))) * (1 - tg.def.evasion);
@@ -1355,6 +1411,7 @@
     if (u.ammo <= 0) return;
     if (u.ammo !== Infinity) u.ammo--;
     A.fired++;
+    S.lastFire = S.t;
     if (d.sKind === 'line') {
       const p = d.sAccuracy * (1 - d.sFalloff * Math.min(1, dd / Math.max(d.sRange, 1e-6))) * (1 - tg.def.evasion);
       const hit = S.rng() < p;
@@ -1492,6 +1549,7 @@
       for (const e of S.units) if (e.side !== u.side && visible(e) && hyp(e.x - plan.e.x, e.y - plan.e.y) <= R) taken.add(e.id);
       if (u.ammo !== Infinity) u.ammo--;
       S.arms[u.side].fired++;
+      S.lastFire = S.t;
       S.proj.push({ kind: 'shell', side: u.side, u: u.id, tg: plan.e.id, sx: u.x, sy: u.y, ax: plan.x, ay: plan.y, d: plan.t * Math.max(1e-3, d.sSpeed), t0: S.t, t1: S.t + plan.t });
     }
     return !!first;
@@ -1540,6 +1598,7 @@
     const d = u.def, R = d.sRange, W = Math.max(0.01, d.sWidth) / 2, A = S.arms[u.side];
     if (u.ammo !== Infinity) u.ammo--;
     A.fired++;
+    S.lastFire = S.t;
     let hit = 0, killed = 0;
     for (const e of S.units) {
       if (e.side === u.side || !visible(e)) continue;
@@ -1739,6 +1798,7 @@
           r.next = S.t + DRONE_TICK;
           const hit = S.rng() < r.acc * (1 - tg.def.evasion);
           recordShot(S, r.x, r.y, tg.x, tg.y, hit ? 1 : 0, r.side, r.owner, tg.id, SHOT_KIND.drone, 0);
+          S.lastFire = S.t;
           if (hit) { S.arms[r.side].droneHits++; damage(S, S.units[r.owner], tg, r.dmg, r.bypass); }
         }
       }
@@ -1991,6 +2051,7 @@
     updateAttacked(S);
     updateLinks(S);
     sideRetreatCheck(S);
+    breakStall(S);
     for (const u of S.units) { u.ox = u.x; u.oy = u.y; }
     for (const u of S.units) think(S, u);
     separate(S);
